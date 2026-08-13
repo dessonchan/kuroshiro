@@ -91,6 +91,13 @@ const specialFunctionalities = [
   { title: 'Send to me (unavailable)', value: 'send_to_me' },
 ]
 
+const rotationOptions = [
+  { title: '0° (Landscape)', value: 0 },
+  { title: '90° (Portrait)', value: 90 },
+  { title: '180° (Landscape Flipped)', value: 180 },
+  { title: '270° (Portrait Flipped)', value: 270 },
+]
+
 const router = useRouter()
 
 async function deleteDevice() {
@@ -222,6 +229,7 @@ async function saveDevice() {
     mirrorMac: device.value.mirrorMac,
     mirrorApikey: device.value.mirrorApikey,
     specialFunction: device.value.specialFunction,
+    rotation: device.value.rotation,
   })
 }
 const nameEditing = ref(false)
@@ -313,6 +321,14 @@ const nameEditing = ref(false)
                     :items="specialFunctionalities"
                     density="compact"
                     label="Special Function"
+                  />
+                </VCol>
+                <VCol cols="12" sm="6" md="4">
+                  <VSelect
+                    v-model="device.rotation"
+                    :items="rotationOptions"
+                    density="compact"
+                    label="Rotation"
                   />
                 </VCol>
                 <VCol cols="12" sm="4" md="4" lg="4">

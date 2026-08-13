@@ -52,6 +52,9 @@ export class Device {
   @Column('text', { default: 'identify' })
   specialFunction?: string
 
+  @Column('int', { default: 0 })
+  rotation: number
+
   @Column('boolean', { default: false })
   resetDevice: boolean
 

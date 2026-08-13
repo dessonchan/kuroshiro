@@ -61,7 +61,7 @@ async function ensureColormapExists(colormapPath: string, logger: Logger): Promi
   })
 }
 
-export async function convertToPng(inputPath: string, outputPath: string, width: number, height: number, logger: Logger) {
+export async function convertToPng(inputPath: string, outputPath: string, width: number, height: number, rotation: number, logger: Logger) {
   const header = buffer.Buffer.allocUnsafe(8)
   const fd = await fs.promises.open(inputPath, 'r')
   try {
@@ -75,8 +75,15 @@ export async function convertToPng(inputPath: string, outputPath: string, width:
   const colormapPath = path.join(process.cwd(), 'public/colormap-2bit.png')
   await ensureColormapExists(colormapPath, logger)
 
+  // When rotation is 90 or 270, the image dimensions are swapped relative to viewport
+  // The final output must always be width×height (device native resolution)
+  const isSwapped = rotation === 90 || rotation === 270
+  const resizeW = isSwapped ? height : width
+  const resizeH = isSwapped ? width : height
+
   return new Promise<void>((resolve, reject) => {
-    const cmd = `magick "${format}:${inputPath}" -resize ${width}x${height} -gravity Center -extent ${width}x${height} -dither FloydSteinberg -remap "${colormapPath}" -define png:bit-depth=2 -define png:color-type=0 -strip png:"${outputPath}"`
+    const rotateArg = rotation ? ` -rotate ${rotation}` : ''
+    const cmd = `magick "${format}:${inputPath}" -resize ${resizeW}x${resizeH}${rotateArg} -gravity Center -extent ${width}x${height} -dither FloydSteinberg -remap "${colormapPath}" -define png:bit-depth=2 -define png:color-type=0 -strip png:"${outputPath}"`
     logger.log(`Running ImageMagick: ${cmd}`)
     exec(cmd, (error, stdout, stderr) => {
       if (error) {

@@ -67,6 +67,11 @@ export class UpdateDeviceDto {
   resetDevice: boolean
 
   @IsOptional()
+  @IsNumber()
+  @IsIn([0, 90, 180, 270])
+  rotation?: number
+
+  @IsOptional()
   @IsBoolean()
   updateFirmware: boolean
 }

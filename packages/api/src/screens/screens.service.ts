@@ -63,7 +63,7 @@ export class ScreensService {
       this.logger.debug(`Planned output path: ${outputPath}`)
       try {
         await downloadImage(body.externalLink, inputPath, this.logger)
-        await convertToPng(inputPath, outputPath, device.width, device.height, this.logger)
+        await convertToPng(inputPath, outputPath, device.width, device.height, device.rotation, this.logger)
         this.logger.log('Download and conversion successful')
       }
       catch (err) {
@@ -85,7 +85,7 @@ export class ScreensService {
         this.logger.debug(`Planned output path: ${outputPath}`)
         await fs.promises.writeFile(inputPath, file.buffer)
         this.logger.log(`Uploaded file saved to ${inputPath}`)
-        await convertToPng(inputPath, outputPath, device.width, device.height, this.logger)
+        await convertToPng(inputPath, outputPath, device.width, device.height, device.rotation, this.logger)
         await fs.promises.unlink(inputPath)
         this.logger.log(`Converted and saved PNG to ${outputPath}`)
       }
@@ -208,7 +208,7 @@ export class ScreensService {
     const outputPath = path.join(destDir, pngFilename)
     try {
       await downloadImage(screen.externalLink, inputPath, this.logger)
-      await convertToPng(inputPath, outputPath, screen.device.width, screen.device.height, this.logger)
+      await convertToPng(inputPath, outputPath, screen.device.width, screen.device.height, screen.device.rotation, this.logger)
       this.logger.log('Updating generation date on screen')
       screen.generatedAt = new Date()
       await this.screensRepository.save(screen)

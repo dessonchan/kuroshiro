@@ -15,6 +15,7 @@ export interface Device {
   mirrorMac: string
   mirrorApikey: string
   specialFunction: string
+  rotation: number
   resetDevice: boolean
   updateFirmware: boolean
   lastSeen: string
