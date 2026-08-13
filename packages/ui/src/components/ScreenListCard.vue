@@ -261,7 +261,6 @@ function previewScreen(screen: Screen) {
                       @click="previewScreen(screen)"
                     />
                     <VBtn
-                      v-if="!screen.plugin"
                       size="small"
                       color="error"
                       variant="tonal"
@@ -270,18 +269,6 @@ function previewScreen(screen: Screen) {
                       :data-test-id="`screen-delete-btn-${screen.id}`"
                       @click="deleteScreen(screen.id)"
                     />
-                    <VTooltip v-else text="Unassign plugin from Manage Plugins page">
-                      <template #activator="{ props: tooltipProps }">
-                        <VBtn
-                          size="small"
-                          color="secondary"
-                          variant="tonal"
-                          :icon="mdiDelete"
-                          disabled
-                          v-bind="tooltipProps"
-                        />
-                      </template>
-                    </VTooltip>
                   </td>
                 </tr>
               </tbody>
