@@ -25,7 +25,7 @@ services:
     env_file:
       - .env
     ports:
-      - '80:${KUROSHIRO_PORT}'
+      - '2303:${KUROSHIRO_PORT}'
     environment:
       KUROSHIRO_PORT: ${KUROSHIRO_PORT}
       KUROSHIRO_API_URL: ${KUROSHIRO_API_URL}
