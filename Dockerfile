@@ -24,8 +24,8 @@ WORKDIR /app
 RUN apk add --no-cache chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Install CJK (Chinese/Japanese/Korean) fonts for proper rendering
-RUN apk add --no-cache font-noto-cjk
+# Install CJK (Chinese/Japanese/Korean) and emoji fonts for proper rendering
+RUN apk add --no-cache font-noto-cjk font-noto-emoji
 
 # Install tini
 RUN apk add --no-cache tini
