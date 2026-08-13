@@ -250,7 +250,7 @@ export class DeviceDisplayService {
     const outputPath = path.join(destDir, pngFilename)
 
     await downloadImage(response.image_url, inputPath, this.logger)
-    await convertToPng(inputPath, outputPath, device.width, device.height, this.logger)
+    await convertToPng(inputPath, outputPath, device.width, device.height, device.rotation, this.logger)
     await fs.promises.unlink(inputPath)
     this.logger.log(`Deleted original image: ${inputPath}`)
 
@@ -341,7 +341,7 @@ export class DeviceDisplayService {
       const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), 'tmp-source')
       try {
         await downloadImage(screen.externalLink, inputPath, this.logger)
-        await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, this.logger)
+        await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
         this.logger.log('Updating generation date on screen')
         screen.generatedAt = new Date()
         await this.screenRepository.save(screen)
@@ -413,7 +413,11 @@ export class DeviceDisplayService {
     const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-web-security'] })
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 800, height: 480 })
+      // Swap viewport dimensions for 90°/270° rotation so content is laid out in portrait
+      const isSwapped = device.rotation === 90 || device.rotation === 270
+      const viewportWidth = isSwapped ? (device.height || 480) : (device.width || 800)
+      const viewportHeight = isSwapped ? (device.width || 800) : (device.height || 480)
+      await page.setViewport({ width: viewportWidth, height: viewportHeight })
       await page.setContent(html, { waitUntil: 'load' })
       const image: Uint8Array = await page.screenshot()
 
@@ -421,7 +425,7 @@ export class DeviceDisplayService {
       const inputPath = path.join(destDir, 'tmp-source')
       await fs.promises.mkdir(destDir, { recursive: true })
       await fs.promises.writeFile(inputPath, buffer.Buffer.from(image))
-      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, this.logger)
+      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
       return this.screenImageUrl(device, screen)
     }
     finally {
