@@ -62,6 +62,18 @@ async function toggleActive() {
   }
 }
 
+const loadingUnassign = ref(false)
+async function unassignFromDevice() {
+  loadingUnassign.value = true
+  try {
+    await pluginsStore.unassignFromDevice(props.plugin.id, props.deviceId!)
+    emit('assignmentsChanged')
+  }
+  finally {
+    loadingUnassign.value = false
+  }
+}
+
 function editPlugin() {
   router.push({ name: 'pluginEdit', params: { id: props.plugin.id } })
 }
@@ -143,6 +155,16 @@ function onAssigned() {
         @click="toggleActive"
       >
         {{ plugin._isActive ? 'Disable' : 'Enable' }}
+      </VBtn>
+      <VBtn
+        v-if="deviceId"
+        variant="tonal"
+        size="small"
+        color="warning"
+        :loading="loadingUnassign"
+        @click="unassignFromDevice"
+      >
+        Unassign
       </VBtn>
       <VBtn
         variant="tonal"
