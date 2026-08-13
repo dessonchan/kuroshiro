@@ -215,15 +215,14 @@ watch(() => device.value?.refreshRate, () => {
     refreshRateNumber.value = device.value?.refreshRate || 0
     refreshRateUnit.value = 'seconds'
   }
-})
+}, { immediate: true })
 
 async function saveDevice() {
   if (!device.value)
     return
-  device.value.refreshRate = newRefreshRate.value
   await deviceStore.updateDevice(device.value.id, {
     name: device.value.name,
-    refreshRate: device.value.refreshRate,
+    refreshRate: newRefreshRate.value,
     resetDevice: device.value.resetDevice,
     mirrorEnabled: device.value.mirrorEnabled,
     mirrorMac: device.value.mirrorMac,
