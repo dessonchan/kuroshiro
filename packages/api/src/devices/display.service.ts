@@ -421,7 +421,23 @@ export class DeviceDisplayService {
       const viewportWidth = isSwapped ? (device.height || 480) : (device.width || 800)
       const viewportHeight = isSwapped ? (device.width || 800) : (device.height || 480)
       await page.setViewport({ width: viewportWidth, height: viewportHeight })
-      await page.setContent(html, { waitUntil: 'load' })
+
+      // Inject CSS to force the screen container to the swapped dimensions for portrait layout
+      let finalHtml = html
+      if (isSwapped) {
+        const portraitStyles = `<style>
+          html, body { margin: 0; padding: 0; width: ${viewportWidth}px; height: ${viewportHeight}px; overflow: hidden; }
+          .screen, .mashup { width: ${viewportWidth}px !important; height: ${viewportHeight}px !important; }
+          .view, .view--full { width: ${viewportWidth}px !important; height: ${viewportHeight}px !important; }
+        </style>`
+        finalHtml = html.replace('</head>', `${portraitStyles}</head>`)
+        if (!finalHtml.includes(portraitStyles)) {
+          // No <head> tag found, prepend styles
+          finalHtml = portraitStyles + html
+        }
+      }
+
+      await page.setContent(finalHtml, { waitUntil: 'load' })
       const image: Uint8Array = await page.screenshot()
 
       const destDir = resolveAppPath('public', 'screens', 'devices', device.id)
