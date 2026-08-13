@@ -1,6 +1,7 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm'
 
-export class AddDeviceRotation1786597760 implements MigrationInterface {
+export class AddDeviceRotation1786599212204 implements MigrationInterface {
+  name = 'AddDeviceRotation1786599212204'
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "device"
