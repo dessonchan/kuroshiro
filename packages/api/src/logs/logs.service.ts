@@ -21,8 +21,8 @@ export class LogsService {
       this.logger.warn(`Device not found: ${deviceMac}`)
       throw new NotFoundException('Device not found')
     }
-    this.logger.debug(`Checking ${logs.log.logs_array.length} entries of payload to consume.`)
-    for (const log of logs.log.logs_array) {
+    this.logger.debug(`Checking ${logs.logs.length} entries of payload to consume.`)
+    for (const log of logs.logs) {
       if (device.logs.some(logEntry => logEntry.logId === log.log_id)) {
         this.logger.log(`Log entry with id: ${log.log_id} for device ${device.id} already exists.`)
       }
