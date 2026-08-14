@@ -3,6 +3,9 @@ import type { Device } from '../devices/devices.entity'
 /**
  * Build the `trmnl` template context object exposed to LiquidJS templates.
  * Sensitive fields (apikey, mirrorApikey) are intentionally excluded.
+ *
+ * When a device is provided, width/height are swapped for 90°/270° rotation
+ * so templates see the dimensions that match the actual rendered viewport.
  */
 export function buildTrmnlContext(options: {
   instanceName: string
@@ -31,6 +34,10 @@ export function buildTrmnlContext(options: {
   }
 
   if (device) {
+    const isSwapped = device.rotation === 90 || device.rotation === 270
+    const displayWidth = isSwapped ? (device.height || 480) : (device.width || 800)
+    const displayHeight = isSwapped ? (device.width || 800) : (device.height || 480)
+
     ctx.trmnl.device = {
       id: device.id,
       name: device.name,
@@ -40,8 +47,8 @@ export function buildTrmnlContext(options: {
       fw_version: device.fwVersion ?? null,
       refresh_rate: device.refreshRate,
       rssi: device.rssi ?? null,
-      width: device.width ?? null,
-      height: device.height ?? null,
+      width: displayWidth,
+      height: displayHeight,
       rotation: device.rotation,
       mirror_enabled: device.mirrorEnabled ?? false,
       last_seen: device.lastSeen?.toISOString() ?? null,
