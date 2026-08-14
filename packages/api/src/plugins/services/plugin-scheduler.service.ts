@@ -8,6 +8,7 @@ import { Repository } from 'typeorm'
 import { Screen } from '../../screens/screens.entity'
 import { PluginDataFetcherService } from './plugin-data-fetcher.service'
 import { PluginRendererService } from './plugin-renderer.service'
+import { buildTrmnlContext } from '../../utils/templateContext'
 
 @Injectable()
 export class PluginSchedulerService {
@@ -42,23 +43,9 @@ export class PluginSchedulerService {
     const task = cron.schedule(cronExpression, async () => {
       try {
         // Build template context with trmnl system variables
-        const templateContext: any = {
-          trmnl: {
-            system: {
-              timestamp_utc: Math.floor(Date.now() / 1000),
-            },
-            plugin_settings: {
-              instance_name: plugin.name,
-              strategy: 'polling',
-              dark_mode: 'no',
-              no_screen_padding: 'no',
-            },
-            user: {
-              id: 'kuroshiro-user',
-              locale: 'en',
-            },
-          },
-        }
+        const templateContext = buildTrmnlContext({
+          instanceName: plugin.name,
+        })
 
         // TODO: Add plugin field values to context when we have device-specific values
 
@@ -70,9 +57,22 @@ export class PluginSchedulerService {
           templateContext,
         )
 
+        // Merge template context with fetched data so trmnl.* is available in templates
+        const templateData: Record<string, any> = { ...templateContext }
+        if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+          Object.assign(templateData, data)
+        }
+        else if (Array.isArray(data)) {
+          templateData.data = data
+          templateData.items = data
+        }
+        else {
+          templateData.data = data
+        }
+
         // Render primary template and cache to all associated screens
         if (plugin.templates.length > 0) {
-          const rendered = await this.renderer.render(plugin.templates[0].liquidMarkup, data)
+          const rendered = await this.renderer.render(plugin.templates[0].liquidMarkup, templateData)
 
           // Update all screens for this plugin
           await this.screenRepository.update(

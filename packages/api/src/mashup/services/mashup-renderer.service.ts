@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config'
 import { PluginDataFetcherService } from '../../plugins/services/plugin-data-fetcher.service'
 import { PluginRendererService } from '../../plugins/services/plugin-renderer.service'
 import { PluginTransformService } from '../../plugins/services/plugin-transform.service'
+import { buildTrmnlContext } from '../../utils/templateContext'
 
 @Injectable()
 export class MashupRendererService {
@@ -43,7 +44,7 @@ export class MashupRendererService {
     return this.buildMashupHtml(mashupConfig.layout, slotHtmls)
   }
 
-  private async renderSlot(slot: MashupSlot, _device: Device): Promise<string> {
+  private async renderSlot(slot: MashupSlot, device: Device): Promise<string> {
     const plugin = slot.plugin
 
     if (!plugin.dataSource || !plugin.templates || plugin.templates.length === 0) {
@@ -51,23 +52,10 @@ export class MashupRendererService {
     }
 
     // Build template context
-    const templateContext: any = {
-      trmnl: {
-        system: {
-          timestamp_utc: Math.floor(Date.now() / 1000),
-        },
-        plugin_settings: {
-          instance_name: plugin.name,
-          strategy: 'polling',
-          dark_mode: 'no',
-          no_screen_padding: 'no',
-        },
-        user: {
-          id: 'kuroshiro-user',
-          locale: 'en',
-        },
-      },
-    }
+    const templateContext = buildTrmnlContext({
+      instanceName: plugin.name,
+      device,
+    })
 
     // Fetch data
     let data = await this.pluginDataFetcher.fetchData(
@@ -86,8 +74,21 @@ export class MashupRendererService {
     // Find template (prefer 'full' layout for now, could support size variants later)
     const template = plugin.templates.find(t => t.layout === 'full') || plugin.templates[0]
 
+    // Merge template context with fetched data so trmnl.* is available in templates
+    const templateData: Record<string, any> = { ...templateContext }
+    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+      Object.assign(templateData, data)
+    }
+    else if (Array.isArray(data)) {
+      templateData.data = data
+      templateData.items = data
+    }
+    else {
+      templateData.data = data
+    }
+
     // Render unwrapped plugin content
-    return await this.pluginRenderer.render(template.liquidMarkup, data)
+    return await this.pluginRenderer.render(template.liquidMarkup, templateData)
   }
 
   private buildMashupHtml(layout: string, slotHtmls: Array<{ slot: MashupSlot, html: string }>): string {

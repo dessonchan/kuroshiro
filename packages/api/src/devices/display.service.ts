@@ -18,6 +18,7 @@ import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
 import { Device } from './devices.entity'
 import { Display } from './display'
+import { buildTrmnlContext } from '../utils/templateContext'
 import { DisplayScreen } from './displayScreen'
 
 interface TrmnlScreenResponse {
@@ -324,7 +325,7 @@ export class DeviceDisplayService {
         // Fallback: fetch and render on-demand
         else if (plugin.dataSource && plugin.templates && plugin.templates.length > 0) {
           try {
-            const renderedHtml = await this.renderPluginHtml(plugin, screen)
+            const renderedHtml = await this.renderPluginHtml(plugin, screen, device)
             if (renderedHtml)
               imgUrl = await this.renderHtmlToScreenPng(renderedHtml, screen, device)
           }
@@ -365,27 +366,14 @@ export class DeviceDisplayService {
       : this.errorImageUrl()
   }
 
-  private async renderPluginHtml(plugin: Plugin, screen: Screen): Promise<string | null> {
+  private async renderPluginHtml(plugin: Plugin, screen: Screen, device: Device): Promise<string | null> {
     this.logger.log(`No cache, rendering plugin ${plugin.id} on-demand for screen ${screen.id}`)
 
-    // Build template context with trmnl system variables
-    const templateContext: any = {
-      trmnl: {
-        system: {
-          timestamp_utc: Math.floor(Date.now() / 1000),
-        },
-        plugin_settings: {
-          instance_name: plugin.name,
-          strategy: 'polling',
-          dark_mode: 'no',
-          no_screen_padding: 'no',
-        },
-        user: {
-          id: 'kuroshiro-user',
-          locale: 'en',
-        },
-      },
-    }
+    // Build template context with trmnl system variables and device data
+    const templateContext = buildTrmnlContext({
+      instanceName: plugin.name,
+      device,
+    })
 
     // TODO: Add plugin field values to context when we have device-specific values
 
@@ -407,7 +395,20 @@ export class DeviceDisplayService {
     if (!fullTemplate)
       return null
 
-    const renderedHtml = await this.pluginRenderer.renderForDisplay(fullTemplate.liquidMarkup, data)
+    // Merge template context with fetched data so trmnl.* is available in templates
+    const templateData: Record<string, any> = { ...templateContext }
+    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+      Object.assign(templateData, data)
+    }
+    else if (Array.isArray(data)) {
+      templateData.data = data
+      templateData.items = data
+    }
+    else {
+      templateData.data = data
+    }
+
+    const renderedHtml = await this.pluginRenderer.renderForDisplay(fullTemplate.liquidMarkup, templateData)
     await this.cachePluginOutput(screen, renderedHtml)
     return renderedHtml
   }
