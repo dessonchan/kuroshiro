@@ -56,7 +56,7 @@ export class ScreensService {
       if (this.configService.get<boolean>('demo_mode'))
         assertPublicUrl(body.externalLink)
       const destDir = resolveAppPath('public', 'screens', 'devices', device.id)
-      const inputPath = path.join(destDir, 'tmp-source')
+      const inputPath = path.join(destDir, `${saved.id}-source`)
       const pngFilename = `${saved.id}.png`
       const outputPath = path.join(destDir, pngFilename)
       this.logger.debug(`Input path: ${inputPath}`)
@@ -86,7 +86,7 @@ export class ScreensService {
         await fs.promises.writeFile(inputPath, file.buffer)
         this.logger.log(`Uploaded file saved to ${inputPath}`)
         await convertToPng(inputPath, outputPath, device.width, device.height, device.rotation, this.logger)
-        await fs.promises.unlink(inputPath)
+        // Keep source file for re-conversion when device rotation changes
         this.logger.log(`Converted and saved PNG to ${outputPath}`)
       }
       catch {
@@ -119,18 +119,21 @@ export class ScreensService {
       throw new NotFoundException('Screen not found')
     }
     const deviceId = screen.device.id
-    // Delete PNG file if it exists
+    // Delete PNG file and source file if they exist
     const pngPath = resolveAppPath('public', 'screens', 'devices', deviceId, `${id}.png`)
-    try {
-      await fs.promises.unlink(pngPath)
-      this.logger.log(`Deleted PNG file: ${pngPath}`)
-    }
-    catch (err) {
-      if (err.code === 'ENOENT') {
-        this.logger.warn(`PNG file not found for deletion: ${pngPath}`)
+    const srcPath = resolveAppPath('public', 'screens', 'devices', deviceId, `${id}-source`)
+    for (const filePath of [pngPath, srcPath]) {
+      try {
+        await fs.promises.unlink(filePath)
+        this.logger.log(`Deleted file: ${filePath}`)
       }
-      else {
-        this.logger.error(`Failed to delete PNG file: ${pngPath} - ${err.message}`)
+      catch (err) {
+        if (err.code === 'ENOENT') {
+          this.logger.warn(`File not found for deletion: ${filePath}`)
+        }
+        else {
+          this.logger.error(`Failed to delete file: ${filePath} - ${err.message}`)
+        }
       }
     }
     await this.screensRepository.delete(id)
@@ -203,13 +206,13 @@ export class ScreensService {
     if (this.configService.get<boolean>('demo_mode'))
       assertPublicUrl(screen.externalLink)
     const destDir = resolveAppPath('public', 'screens', 'devices', screen.device.id)
-    const inputPath = path.join(destDir, 'tmp-source')
+    const inputPath = path.join(destDir, `${screen.id}-source`)
     const pngFilename = `${screen.id}.png`
     const outputPath = path.join(destDir, pngFilename)
     try {
       await downloadImage(screen.externalLink, inputPath, this.logger)
       await convertToPng(inputPath, outputPath, screen.device.width, screen.device.height, screen.device.rotation, this.logger)
-      this.logger.log('Updating generation date on screen')
+      // Keep source file for re-conversion when device rotation changes
       screen.generatedAt = new Date()
       await this.screensRepository.save(screen)
       this.logger.log('Download and conversion successful')

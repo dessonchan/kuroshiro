@@ -218,7 +218,19 @@ export class DeviceDisplayService {
     }
     else {
       this.logger.log(`Returning screen ${activeScreen.id} for device ${device.id}`)
-      if (await fileExists(this.screenImagePath(device, activeScreen))) {
+      // For file/external screens, re-convert from source to ensure correct rotation
+      const sourcePath = this.screenSourcePath(device, activeScreen)
+      if ((activeScreen.type === 'file' || activeScreen.type === 'external') && await fileExists(sourcePath)) {
+        try {
+          await convertToPng(sourcePath, this.screenImagePath(device, activeScreen), device.width, device.height, device.rotation, this.logger)
+          imgUrl = this.screenImageUrl(device, activeScreen)
+        }
+        catch (err) {
+          this.logger.error(`Failed to re-convert source image: ${err.message}`)
+          imgUrl = this.screenImageUrl(device, activeScreen)
+        }
+      }
+      else if (await fileExists(this.screenImagePath(device, activeScreen))) {
         imgUrl = this.screenImageUrl(device, activeScreen)
       }
       else {
@@ -347,7 +359,7 @@ export class DeviceDisplayService {
     }
     // Handle external link screen
     if (screen.externalLink && !screen.fetchManual) {
-      const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), 'tmp-source')
+      const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), `${screen.id}-source`)
       try {
         await downloadImage(screen.externalLink, inputPath, this.logger)
         await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
@@ -365,7 +377,22 @@ export class DeviceDisplayService {
     if (imgUrl !== null)
       return imgUrl
 
-    // No rendering source (e.g. uploaded file screens) — serve the stored image if present
+    // For file/external screens without cached output — re-convert from source
+    // using the device's current rotation so the image is always correctly oriented
+    if (screen.type === 'file' || screen.type === 'external') {
+      const sourcePath = this.screenSourcePath(device, screen)
+      if (await fileExists(sourcePath)) {
+        try {
+          await convertToPng(sourcePath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
+          return this.screenImageUrl(device, screen)
+        }
+        catch (err) {
+          this.logger.error(`Failed to re-convert source image: ${err.message}`)
+        }
+      }
+    }
+
+    // Fallback: serve existing PNG if source is unavailable
     return await fileExists(this.screenImagePath(device, screen))
       ? this.screenImageUrl(device, screen)
       : this.errorImageUrl()
@@ -484,6 +511,10 @@ export class DeviceDisplayService {
 
   private screenImagePath(device: Device, screen: Screen): string {
     return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
+  }
+
+  private screenSourcePath(device: Device, screen: Screen): string {
+    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}-source`)
   }
 
   private screenImageUrl(device: Device, screen: Screen): string {
