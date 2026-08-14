@@ -332,9 +332,14 @@ export class DeviceDisplayService {
           }
         }
       }
-      // Handle HTML screen
+      // Handle HTML screen — render LiquidJS templates first
       else if (screen.html) {
-        imgUrl = await this.renderHtmlToScreenPng(this.wrapInTrmnlShell(screen.html), screen, device)
+        const templateContext = buildTrmnlContext({
+          instanceName: 'HTML Screen',
+          device,
+        })
+        const renderedHtml = await this.pluginRenderer.render(screen.html, templateContext)
+        imgUrl = await this.renderHtmlToScreenPng(this.wrapInTrmnlShell(renderedHtml), screen, device)
       }
     }
     // Handle external link screen
