@@ -13,6 +13,7 @@ import { PluginDataFetcherService } from './services/plugin-data-fetcher.service
 import { PluginRendererService } from './services/plugin-renderer.service'
 import { PluginSchedulerService } from './services/plugin-scheduler.service'
 import { PluginTransformService } from './services/plugin-transform.service'
+import { buildTrmnlContext } from '../utils/templateContext'
 
 @Injectable()
 export class PluginsService implements OnModuleInit {
@@ -349,23 +350,10 @@ export class PluginsService implements OnModuleInit {
 
   async preview(url: string, method: string, headers?: Record<string, string>, body?: any, template?: string, transformJs?: string, fieldValues?: Record<string, string>): Promise<{ html: string, data: any }> {
     // Build template context with trmnl system variables and plugin field values
-    const templateContext: any = {
-      trmnl: {
-        system: {
-          timestamp_utc: Math.floor(Date.now() / 1000),
-        },
-        plugin_settings: {
-          instance_name: 'Preview',
-          strategy: 'polling',
-          dark_mode: 'no',
-          no_screen_padding: 'no',
-        },
-        user: {
-          id: 'preview-user',
-          locale: 'en',
-        },
-      },
-    }
+    const templateContext = buildTrmnlContext({
+      instanceName: 'Preview',
+      userId: 'preview-user',
+    })
 
     // Add plugin field values to root context
     if (fieldValues) {
