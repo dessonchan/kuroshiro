@@ -43,64 +43,78 @@ export class PluginSchedulerService {
 
     const task = cron.schedule(cronExpression, async () => {
       try {
-        // Find a device associated with this plugin's screens for template context
-        let device: Device | undefined
-        try {
-          const screen = await this.screenRepository.findOne({
-            where: { plugin: { id: plugin.id } },
-            relations: { device: true },
-          })
-          device = screen?.device
-        }
-        catch {
-          // Screen or device not available — proceed without device context
-        }
-
-        // Build template context with trmnl system variables and device data
-        const templateContext = buildTrmnlContext({
+        // Build base template context (no device — shared across all renders)
+        const baseContext = buildTrmnlContext({
           instanceName: plugin.name,
-          device,
         })
 
         // TODO: Add plugin field values to context when we have device-specific values
 
+        // Fetch data once — same API call for all devices
         const data = await this.dataFetcher.fetchData(
-          plugin.dataSource.method,
-          plugin.dataSource.url,
-          plugin.dataSource.headers,
-          plugin.dataSource.body,
-          templateContext,
+          plugin.dataSource!.method,
+          plugin.dataSource!.url,
+          plugin.dataSource!.headers,
+          plugin.dataSource!.body,
+          baseContext,
         )
 
-        // Merge template context with fetched data so trmnl.* is available in templates
-        const templateData: Record<string, any> = { ...templateContext }
-        if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
-          Object.assign(templateData, data)
-        }
-        else if (Array.isArray(data)) {
-          templateData.data = data
-          templateData.items = data
-        }
-        else {
-          templateData.data = data
-        }
+        if (plugin.templates.length === 0)
+          return
 
-        // Render primary template and cache to all associated screens
-        if (plugin.templates.length > 0) {
-          const rendered = await this.renderer.render(plugin.templates[0].liquidMarkup, templateData)
+        // Find all screens for this plugin with their devices
+        const screens = await this.screenRepository.find({
+          where: { plugin: { id: plugin.id } },
+          relations: { device: true },
+        })
 
-          // Update all screens for this plugin
+        // Render per unique device — multiple screens on the same device share output
+        const deviceRenderCache = new Map<string, string>()
+
+        for (const screen of screens) {
+          const device = screen.device as Device | undefined
+          const deviceId = device?.id ?? '__no_device__'
+
+          let rendered: string
+          if (deviceRenderCache.has(deviceId)) {
+            rendered = deviceRenderCache.get(deviceId)!
+          }
+          else {
+            // Build device-specific template context
+            const templateContext = buildTrmnlContext({
+              instanceName: plugin.name,
+              device,
+            })
+
+            // Merge template context with fetched data so trmnl.* is available in templates
+            const templateData: Record<string, any> = { ...templateContext }
+            if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+              Object.assign(templateData, data)
+            }
+            else if (Array.isArray(data)) {
+              templateData.data = data
+              templateData.items = data
+            }
+            else {
+              templateData.data = data
+            }
+
+            rendered = await this.renderer.render(plugin.templates[0].liquidMarkup, templateData)
+            deviceRenderCache.set(deviceId, rendered)
+          }
+
+          // Update this specific screen's cache
           await this.screenRepository.update(
-            { plugin: { id: plugin.id } },
+            { id: screen.id },
             {
               cachedPluginOutput: rendered,
               generatedAt: new Date(),
             },
           )
-
-          // Invalidate mashup caches that use this plugin
-          await this.invalidateMashupCaches(plugin.id)
         }
+
+        // Invalidate mashup caches that use this plugin
+        await this.invalidateMashupCaches(plugin.id)
       }
       catch (error) {
         console.error(`Error executing plugin ${plugin.id}:`, error)
