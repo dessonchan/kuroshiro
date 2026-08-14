@@ -9,6 +9,7 @@ import { Screen } from '../../screens/screens.entity'
 import { PluginDataFetcherService } from './plugin-data-fetcher.service'
 import { PluginRendererService } from './plugin-renderer.service'
 import { buildTrmnlContext } from '../../utils/templateContext'
+import { Device } from '../../devices/devices.entity'
 
 @Injectable()
 export class PluginSchedulerService {
@@ -42,9 +43,23 @@ export class PluginSchedulerService {
 
     const task = cron.schedule(cronExpression, async () => {
       try {
-        // Build template context with trmnl system variables
+        // Find a device associated with this plugin's screens for template context
+        let device: Device | undefined
+        try {
+          const screen = await this.screenRepository.findOne({
+            where: { plugin: { id: plugin.id } },
+            relations: { device: true },
+          })
+          device = screen?.device
+        }
+        catch {
+          // Screen or device not available — proceed without device context
+        }
+
+        // Build template context with trmnl system variables and device data
         const templateContext = buildTrmnlContext({
           instanceName: plugin.name,
+          device,
         })
 
         // TODO: Add plugin field values to context when we have device-specific values
