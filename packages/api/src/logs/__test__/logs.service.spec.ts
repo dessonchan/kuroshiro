@@ -35,12 +35,12 @@ describe('logsService', () => {
   })
 
   it('addLogToDevice throws if device is not found', async () => {
-    const dto: CreateLogDto = { logs: [{ log_id: 1 }] }
+    const dto: CreateLogDto = { logs: [{ id: 1 }] }
     await expect(service.addLogToDevice(deviceMac, dto)).rejects.toThrow()
   })
 
   it('addLogToDevice is not saving duplicate log entries', async () => {
-    const dto: CreateLogDto = { logs: [{ log_id: 1 }, { log_id: 2 }] }
+    const dto: CreateLogDto = { logs: [{ id: 1 }, { id: 2 }] }
     const device = { id: 'dev', screens: [], width: 100, height: 100, logs: [{ logId: 1 }, { logId: 2 }] } as Device
     devicesRepo.findOne.mockResolvedValue(device)
     await service.addLogToDevice(deviceMac, dto)
@@ -48,7 +48,7 @@ describe('logsService', () => {
   })
 
   it('addLogToDevice saves new log entries', async () => {
-    const dto: CreateLogDto = { logs: [{ log_id: 1 }, { log_id: 2 }, { log_id: 3 }] }
+    const dto: CreateLogDto = { logs: [{ id: 1 }, { id: 2 }, { id: 3 }] }
     const device = { id: 'dev', screens: [], width: 100, height: 100, logs: [{ logId: 1 }, { logId: 2 }] } as Device
     devicesRepo.findOne.mockResolvedValue(device)
     await service.addLogToDevice(deviceMac, dto)

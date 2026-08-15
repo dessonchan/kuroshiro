@@ -23,16 +23,16 @@ export class LogsService {
     }
     this.logger.debug(`Checking ${logs.logs.length} entries of payload to consume.`)
     for (const log of logs.logs) {
-      if (device.logs.some(logEntry => logEntry.logId === log.log_id)) {
-        this.logger.log(`Log entry with id: ${log.log_id} for device ${device.id} already exists.`)
+      if (device.logs.some(logEntry => logEntry.logId === log.id)) {
+        this.logger.log(`Log entry with id: ${log.id} for device ${device.id} already exists.`)
       }
       else {
-        this.logger.debug(`Writing log entry with id: ${log.log_id} for device ${device.id}.`)
+        this.logger.debug(`Writing log entry with id: ${log.id} for device ${device.id}.`)
         await this.logsRepository.save({
           entry: JSON.stringify(log),
           date: new Date().toISOString(),
           device,
-          logId: log.log_id,
+          logId: log.id,
         })
       }
     }

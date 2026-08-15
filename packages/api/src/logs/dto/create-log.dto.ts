@@ -1,12 +1,14 @@
-import { IsArray, IsNumber, IsObject, IsOptional } from 'class-validator'
+import { IsArray, IsNumber, IsOptional } from 'class-validator'
 
 /**
  * Matches the TRMNL firmware log payload format:
- * { "logs": [{ "log_id": 1, ... }, ...] }
+ * { "logs": [{ "id": 1, "message": "...", ... }] }
  *
- * Each log entry must have a numeric `log_id`; additional fields are allowed.
+ * The firmware serialises each log entry with `id` as the log identifier
+ * (see serialize_log.cpp: json_log["id"] = input.logId).
+ * Additional fields (message, wifi_signal, etc.) are allowed and stored as JSON.
  */
 export class CreateLogDto {
   @IsArray()
-  logs: Array<{ log_id: number } & Record<string, any>>
+  logs: Array<{ id: number } & Record<string, any>>
 }
