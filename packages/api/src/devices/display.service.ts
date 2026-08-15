@@ -95,10 +95,7 @@ export class DeviceDisplayService {
     device.lastSeen = new Date()
     await this.deviceRepository.save(device)
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
-    const activeScreen = await this.screenRepository.findOne({
-      where: { device: { id: device.id }, isActive: true },
-      relations: { plugin: true, mashupConfiguration: true },
-    })
+    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new Display({
@@ -114,16 +111,10 @@ export class DeviceDisplayService {
     if (!device.mirrorEnabled) {
       this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
       await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
-      let nextScreen = await this.screenRepository.findOne({
-        where: { device: { id: device.id }, order: activeScreen.order + 1 },
-        relations: { plugin: true, mashupConfiguration: true },
-      })
+      let nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: activeScreen.order + 1 })
       if (!nextScreen) {
         this.logger.log(`No next screen found, cycling to first screen for device ${device.id}`)
-        nextScreen = await this.screenRepository.findOne({
-          where: { device: { id: device.id }, order: 1 },
-          relations: { plugin: true, mashupConfiguration: true },
-        })
+        nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
       }
       nextScreen.isActive = true
       await this.screenRepository.save(nextScreen)
@@ -197,10 +188,7 @@ export class DeviceDisplayService {
       this.logger.warn(`Invalid API key for device: ${headers.id}`)
       throw new UnauthorizedException('Invalid API key')
     }
-    const activeScreen = await this.screenRepository.findOne({
-      where: { device: { id: device.id }, isActive: true },
-      relations: { plugin: true, mashupConfiguration: true },
-    })
+    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new DisplayScreen({
@@ -533,22 +521,11 @@ export class DeviceDisplayService {
 
   /**
    * Derive a meaningful filename for the screen response.
-   * Uses the uploaded filename for file/external screens,
-   * the plugin name for plugin screens, the mashup label for mashup screens,
-   * or falls back to the screen type.
+   * All screens have a filename set during creation (via device settings).
    * Spaces, hyphens, and underscores are converted to camelCase.
    */
   private screenFilename(screen: Screen): string {
-    let name: string | undefined
-    if (screen.filename)
-      name = screen.filename
-    else if (screen.type === 'plugin' && screen.plugin?.name)
-      name = screen.plugin.name
-    else if (screen.type === 'mashup' && screen.mashupConfiguration?.label)
-      name = screen.mashupConfiguration.label
-    else
-      name = screen.type
-
+    const name = screen.filename ?? screen.type
     return name
       .replace(/[-_]/g, ' ')
       .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
