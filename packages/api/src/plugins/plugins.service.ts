@@ -1,6 +1,6 @@
 import type { MashupSlot } from '../mashup/entities/mashup-slot.entity'
 import type { AssignPluginToDeviceDto } from './dto/assign-plugin-to-device.dto'
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { Screen } from '../screens/screens.entity'
@@ -95,6 +95,10 @@ export class PluginsService implements OnModuleInit {
   }
 
   async assignToDevice(pluginId: string, assignData: AssignPluginToDeviceDto): Promise<DevicePlugin> {
+    const plugin = await this.pluginsRepository.findOneBy({ id: pluginId })
+    if (!plugin)
+      throw new NotFoundException('Plugin not found')
+
     const devicePlugin = this.devicePluginRepository.create({
       plugin: { id: pluginId } as Plugin,
       device: { id: assignData.deviceId } as any,
