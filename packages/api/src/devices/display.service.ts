@@ -16,6 +16,7 @@ import { Screen } from '../screens/screens.entity'
 import { fileExists } from '../utils/fileExists'
 import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
+import { buildTrmnlContext } from '../utils/templateContext'
 import { Device } from './devices.entity'
 import { Display } from './display'
 import { DisplayScreen } from './displayScreen'
@@ -94,7 +95,10 @@ export class DeviceDisplayService {
     device.lastSeen = new Date()
     await this.deviceRepository.save(device)
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
+    const activeScreen = await this.screenRepository.findOne({
+      where: { device: { id: device.id }, isActive: true },
+      relations: { plugin: true, mashupConfiguration: true },
+    })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new Display({
@@ -110,10 +114,16 @@ export class DeviceDisplayService {
     if (!device.mirrorEnabled) {
       this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
       await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
-      let nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: activeScreen.order + 1 })
+      let nextScreen = await this.screenRepository.findOne({
+        where: { device: { id: device.id }, order: activeScreen.order + 1 },
+        relations: { plugin: true, mashupConfiguration: true },
+      })
       if (!nextScreen) {
         this.logger.log(`No next screen found, cycling to first screen for device ${device.id}`)
-        nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
+        nextScreen = await this.screenRepository.findOne({
+          where: { device: { id: device.id }, order: 1 },
+          relations: { plugin: true, mashupConfiguration: true },
+        })
       }
       nextScreen.isActive = true
       await this.screenRepository.save(nextScreen)
@@ -122,7 +132,7 @@ export class DeviceDisplayService {
       const imgUrl = await this.generateScreenImage(nextScreen, device)
 
       return new Display({
-        filename: `${nextScreen.filename}_${nextScreen.generatedAt.toISOString()}`,
+        filename: `${this.screenFilename(nextScreen)}_${nextScreen.generatedAt.toISOString()}`,
         firmware_url: '',
         image_url: imgUrl,
         refresh_rate: device.refreshRate,
@@ -187,7 +197,10 @@ export class DeviceDisplayService {
       this.logger.warn(`Invalid API key for device: ${headers.id}`)
       throw new UnauthorizedException('Invalid API key')
     }
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
+    const activeScreen = await this.screenRepository.findOne({
+      where: { device: { id: device.id }, isActive: true },
+      relations: { plugin: true, mashupConfiguration: true },
+    })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new DisplayScreen({
@@ -217,7 +230,19 @@ export class DeviceDisplayService {
     }
     else {
       this.logger.log(`Returning screen ${activeScreen.id} for device ${device.id}`)
-      if (await fileExists(this.screenImagePath(device, activeScreen))) {
+      // For file/external screens, re-convert from source to ensure correct rotation
+      const sourcePath = this.screenSourcePath(device, activeScreen)
+      if ((activeScreen.type === 'file' || activeScreen.type === 'external') && await fileExists(sourcePath)) {
+        try {
+          await convertToPng(sourcePath, this.screenImagePath(device, activeScreen), device.width, device.height, device.rotation, this.logger)
+          imgUrl = this.screenImageUrl(device, activeScreen)
+        }
+        catch (err) {
+          this.logger.error(`Failed to re-convert source image: ${err.message}`)
+          imgUrl = this.screenImageUrl(device, activeScreen)
+        }
+      }
+      else if (await fileExists(this.screenImagePath(device, activeScreen))) {
         imgUrl = this.screenImageUrl(device, activeScreen)
       }
       else {
@@ -226,7 +251,9 @@ export class DeviceDisplayService {
       }
     }
     return new DisplayScreen({
-      filename: device.mirrorEnabled ? `mirror_${new Date().toISOString()}` : `${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`,
+      filename: device.mirrorEnabled
+        ? `mirror_${new Date().toISOString()}`
+        : `${this.screenFilename(activeScreen)}_${activeScreen.generatedAt.toISOString()}`,
       image_url: imgUrl,
       refresh_rate: device.refreshRate,
       rendered_at: device.mirrorEnabled ? undefined : activeScreen.generatedAt,
@@ -250,7 +277,7 @@ export class DeviceDisplayService {
     const outputPath = path.join(destDir, pngFilename)
 
     await downloadImage(response.image_url, inputPath, this.logger)
-    await convertToPng(inputPath, outputPath, device.width, device.height, this.logger)
+    await convertToPng(inputPath, outputPath, device.width, device.height, device.rotation, this.logger)
     await fs.promises.unlink(inputPath)
     this.logger.log(`Deleted original image: ${inputPath}`)
 
@@ -324,7 +351,7 @@ export class DeviceDisplayService {
         // Fallback: fetch and render on-demand
         else if (plugin.dataSource && plugin.templates && plugin.templates.length > 0) {
           try {
-            const renderedHtml = await this.renderPluginHtml(plugin, screen)
+            const renderedHtml = await this.renderPluginHtml(plugin, screen, device)
             if (renderedHtml)
               imgUrl = await this.renderHtmlToScreenPng(renderedHtml, screen, device)
           }
@@ -334,17 +361,22 @@ export class DeviceDisplayService {
           }
         }
       }
-      // Handle HTML screen
+      // Handle HTML screen — render LiquidJS templates first
       else if (screen.html) {
-        imgUrl = await this.renderHtmlToScreenPng(this.wrapInTrmnlShell(screen.html), screen, device)
+        const templateContext = buildTrmnlContext({
+          instanceName: 'HTML Screen',
+          device,
+        })
+        const renderedHtml = await this.pluginRenderer.render(screen.html, templateContext)
+        imgUrl = await this.renderHtmlToScreenPng(this.wrapInTrmnlShell(renderedHtml), screen, device)
       }
     }
     // Handle external link screen
     if (screen.externalLink && !screen.fetchManual) {
-      const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), 'tmp-source')
+      const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), `${screen.id}-source`)
       try {
         await downloadImage(screen.externalLink, inputPath, this.logger)
-        await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, this.logger)
+        await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
         this.logger.log('Updating generation date on screen')
         screen.generatedAt = new Date()
         await this.screenRepository.save(screen)
@@ -359,33 +391,35 @@ export class DeviceDisplayService {
     if (imgUrl !== null)
       return imgUrl
 
-    // No rendering source (e.g. uploaded file screens) — serve the stored image if present
+    // For file/external screens without cached output — re-convert from source
+    // using the device's current rotation so the image is always correctly oriented
+    if (screen.type === 'file' || screen.type === 'external') {
+      const sourcePath = this.screenSourcePath(device, screen)
+      if (await fileExists(sourcePath)) {
+        try {
+          await convertToPng(sourcePath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
+          return this.screenImageUrl(device, screen)
+        }
+        catch (err) {
+          this.logger.error(`Failed to re-convert source image: ${err.message}`)
+        }
+      }
+    }
+
+    // Fallback: serve existing PNG if source is unavailable
     return await fileExists(this.screenImagePath(device, screen))
       ? this.screenImageUrl(device, screen)
       : this.errorImageUrl()
   }
 
-  private async renderPluginHtml(plugin: Plugin, screen: Screen): Promise<string | null> {
+  private async renderPluginHtml(plugin: Plugin, screen: Screen, device: Device): Promise<string | null> {
     this.logger.log(`No cache, rendering plugin ${plugin.id} on-demand for screen ${screen.id}`)
 
-    // Build template context with trmnl system variables
-    const templateContext: any = {
-      trmnl: {
-        system: {
-          timestamp_utc: Math.floor(Date.now() / 1000),
-        },
-        plugin_settings: {
-          instance_name: plugin.name,
-          strategy: 'polling',
-          dark_mode: 'no',
-          no_screen_padding: 'no',
-        },
-        user: {
-          id: 'kuroshiro-user',
-          locale: 'en',
-        },
-      },
-    }
+    // Build template context with trmnl system variables and device data
+    const templateContext = buildTrmnlContext({
+      instanceName: plugin.name,
+      device,
+    })
 
     // TODO: Add plugin field values to context when we have device-specific values
 
@@ -407,7 +441,20 @@ export class DeviceDisplayService {
     if (!fullTemplate)
       return null
 
-    const renderedHtml = await this.pluginRenderer.renderForDisplay(fullTemplate.liquidMarkup, data)
+    // Merge template context with fetched data so trmnl.* is available in templates
+    const templateData: Record<string, any> = { ...templateContext }
+    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+      Object.assign(templateData, data)
+    }
+    else if (Array.isArray(data)) {
+      templateData.data = data
+      templateData.items = data
+    }
+    else {
+      templateData.data = data
+    }
+
+    const renderedHtml = await this.pluginRenderer.renderForDisplay(fullTemplate.liquidMarkup, templateData)
     await this.cachePluginOutput(screen, renderedHtml)
     return renderedHtml
   }
@@ -416,15 +463,35 @@ export class DeviceDisplayService {
     const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-web-security'] })
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 800, height: 480 })
-      await page.setContent(html, { waitUntil: 'load' })
+      // Swap viewport dimensions for 90°/270° rotation so content is laid out in portrait
+      const isSwapped = device.rotation === 90 || device.rotation === 270
+      const viewportWidth = isSwapped ? (device.height || 480) : (device.width || 800)
+      const viewportHeight = isSwapped ? (device.width || 800) : (device.height || 480)
+      await page.setViewport({ width: viewportWidth, height: viewportHeight })
+
+      // Inject CSS to force the screen container to the swapped dimensions for portrait layout
+      let finalHtml = html
+      if (isSwapped) {
+        const portraitStyles = `<style>
+          html, body { margin: 0; padding: 0; width: ${viewportWidth}px; height: ${viewportHeight}px; overflow: hidden; }
+          .screen, .mashup { width: ${viewportWidth}px !important; height: ${viewportHeight}px !important; }
+          .view, .view--full { width: ${viewportWidth}px !important; height: ${viewportHeight}px !important; }
+        </style>`
+        finalHtml = html.replace('</head>', `${portraitStyles}</head>`)
+        if (!finalHtml.includes(portraitStyles)) {
+          // No <head> tag found, prepend styles
+          finalHtml = portraitStyles + html
+        }
+      }
+
+      await page.setContent(finalHtml, { waitUntil: 'load' })
       const image: Uint8Array = await page.screenshot()
 
       const destDir = resolveAppPath('public', 'screens', 'devices', device.id)
       const inputPath = path.join(destDir, 'tmp-source')
       await fs.promises.mkdir(destDir, { recursive: true })
       await fs.promises.writeFile(inputPath, buffer.Buffer.from(image))
-      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, this.logger)
+      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
       return this.screenImageUrl(device, screen)
     }
     finally {
@@ -458,6 +525,34 @@ export class DeviceDisplayService {
 
   private screenImagePath(device: Device, screen: Screen): string {
     return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
+  }
+
+  private screenSourcePath(device: Device, screen: Screen): string {
+    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}-source`)
+  }
+
+  /**
+   * Derive a meaningful filename for the screen response.
+   * Uses the uploaded filename for file/external screens,
+   * the plugin name for plugin screens, the mashup label for mashup screens,
+   * or falls back to the screen type.
+   * Spaces, hyphens, and underscores are converted to camelCase.
+   */
+  private screenFilename(screen: Screen): string {
+    let name: string | undefined
+    if (screen.filename)
+      name = screen.filename
+    else if (screen.type === 'plugin' && screen.plugin?.name)
+      name = screen.plugin.name
+    else if (screen.type === 'mashup' && screen.mashupConfiguration?.label)
+      name = screen.mashupConfiguration.label
+    else
+      name = screen.type
+
+    return name
+      .replace(/[-_]/g, ' ')
+      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/\s+/g, '')
   }
 
   private screenImageUrl(device: Device, screen: Screen): string {
