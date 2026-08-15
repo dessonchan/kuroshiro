@@ -95,7 +95,7 @@ export class PluginsService implements OnModuleInit {
   }
 
   async assignToDevice(pluginId: string, assignData: AssignPluginToDeviceDto): Promise<DevicePlugin> {
-    const plugin = await this.pluginsRepository.findOneBy({ id: pluginId })
+    const plugin = await this.pluginRepository.findOneBy({ id: pluginId })
     if (!plugin)
       throw new NotFoundException('Plugin not found')
 
