@@ -95,7 +95,10 @@ export class DeviceDisplayService {
     device.lastSeen = new Date()
     await this.deviceRepository.save(device)
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
+    const activeScreen = await this.screenRepository.findOne({
+      where: { device: { id: device.id }, isActive: true },
+      relations: { plugin: true, mashupConfiguration: true },
+    })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new Display({
@@ -111,10 +114,16 @@ export class DeviceDisplayService {
     if (!device.mirrorEnabled) {
       this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
       await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
-      let nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: activeScreen.order + 1 })
+      let nextScreen = await this.screenRepository.findOne({
+        where: { device: { id: device.id }, order: activeScreen.order + 1 },
+        relations: { plugin: true, mashupConfiguration: true },
+      })
       if (!nextScreen) {
         this.logger.log(`No next screen found, cycling to first screen for device ${device.id}`)
-        nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
+        nextScreen = await this.screenRepository.findOne({
+          where: { device: { id: device.id }, order: 1 },
+          relations: { plugin: true, mashupConfiguration: true },
+        })
       }
       nextScreen.isActive = true
       await this.screenRepository.save(nextScreen)
@@ -123,7 +132,7 @@ export class DeviceDisplayService {
       const imgUrl = await this.generateScreenImage(nextScreen, device)
 
       return new Display({
-        filename: `${nextScreen.filename}_${nextScreen.generatedAt.toISOString()}`,
+        filename: `${this.screenFilename(nextScreen)}_${nextScreen.generatedAt.toISOString()}`,
         firmware_url: '',
         image_url: imgUrl,
         refresh_rate: device.refreshRate,
@@ -188,7 +197,10 @@ export class DeviceDisplayService {
       this.logger.warn(`Invalid API key for device: ${headers.id}`)
       throw new UnauthorizedException('Invalid API key')
     }
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
+    const activeScreen = await this.screenRepository.findOne({
+      where: { device: { id: device.id }, isActive: true },
+      relations: { plugin: true, mashupConfiguration: true },
+    })
     if (!activeScreen && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new DisplayScreen({
@@ -239,7 +251,9 @@ export class DeviceDisplayService {
       }
     }
     return new DisplayScreen({
-      filename: device.mirrorEnabled ? `mirror_${new Date().toISOString()}` : `${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`,
+      filename: device.mirrorEnabled
+        ? `mirror_${new Date().toISOString()}`
+        : `${this.screenFilename(activeScreen)}_${activeScreen.generatedAt.toISOString()}`,
       image_url: imgUrl,
       refresh_rate: device.refreshRate,
       rendered_at: device.mirrorEnabled ? undefined : activeScreen.generatedAt,
@@ -515,6 +529,30 @@ export class DeviceDisplayService {
 
   private screenSourcePath(device: Device, screen: Screen): string {
     return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}-source`)
+  }
+
+  /**
+   * Derive a meaningful filename for the screen response.
+   * Uses the uploaded filename for file/external screens,
+   * the plugin name for plugin screens, the mashup label for mashup screens,
+   * or falls back to the screen type.
+   * Spaces, hyphens, and underscores are converted to camelCase.
+   */
+  private screenFilename(screen: Screen): string {
+    let name: string | undefined
+    if (screen.filename)
+      name = screen.filename
+    else if (screen.type === 'plugin' && screen.plugin?.name)
+      name = screen.plugin.name
+    else if (screen.type === 'mashup' && screen.mashupConfiguration?.label)
+      name = screen.mashupConfiguration.label
+    else
+      name = screen.type
+
+    return name
+      .replace(/[-_]/g, ' ')
+      .replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/\s+/g, '')
   }
 
   private screenImageUrl(device: Device, screen: Screen): string {
