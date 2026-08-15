@@ -108,6 +108,7 @@ export class PluginsService implements OnModuleInit {
       device: { id: assignData.deviceId } as any,
       plugin: { id: pluginId } as Plugin,
       devicePluginId: saved.id,
+      filename: plugin.name,
       isActive: assignData.isActive ?? true,
       order: maxOrder + 1,
       generatedAt: new Date(),
