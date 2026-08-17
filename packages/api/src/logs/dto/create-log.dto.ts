@@ -1,4 +1,4 @@
-import { IsArray, IsNumber, IsOptional } from 'class-validator'
+import { IsArray } from 'class-validator'
 
 /**
  * Matches the TRMNL firmware log payload format:
@@ -10,5 +10,5 @@ import { IsArray, IsNumber, IsOptional } from 'class-validator'
  */
 export class CreateLogDto {
   @IsArray()
-  logs: Array<{ id: number } & Record<string, any>>
+  logs: any[]
 }
