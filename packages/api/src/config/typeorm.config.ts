@@ -1,3 +1,4 @@
+import { ActionButton } from '../action-buttons/action-button.entity'
 import process from 'node:process'
 import { DataSource } from 'typeorm'
 import { Device } from '../devices/devices.entity'
@@ -20,7 +21,7 @@ const AppDataSource = new DataSource({
   username: process.env.KUROSHIRO_DB_USER || 'root',
   password: process.env.KUROSHIRO_DB_PASSWORD || 'root',
   database: process.env.KUROSHIRO_DB_DB || 'test',
-  entities: [Device, Screen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, PluginVariable, MashupConfiguration, MashupSlot],
+  entities: [Device, Screen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, PluginVariable, MashupConfiguration, MashupSlot, ActionButton],
   migrations: ['dist/src/migrations/*.js'],
   migrationsTableName: 'migrations',
   synchronize: false,

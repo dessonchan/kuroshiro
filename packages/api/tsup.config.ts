@@ -8,7 +8,8 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   outDir: 'dist',
-  minify: false,
+  minify: true,
+  keepNames: true,
   target: 'es2022',
   external: ['node_modules'],
 })
