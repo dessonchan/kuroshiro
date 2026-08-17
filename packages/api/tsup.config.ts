@@ -9,6 +9,7 @@ export default defineConfig({
   clean: true,
   outDir: 'dist',
   minify: true,
+  keepNames: true,
   target: 'es2022',
   external: ['node_modules'],
 })
