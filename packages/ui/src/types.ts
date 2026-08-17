@@ -19,6 +19,20 @@ export interface Device {
   resetDevice: boolean
   updateFirmware: boolean
   lastSeen: string
+  buttons?: string[]
+}
+
+export interface ActionButton {
+  id: string
+  button: string
+  actionType: 'display_screen' | 'webhook'
+  screenId?: string | null
+  webhookUrl?: string | null
+  webhookMethod?: string
+  webhookPayload?: string | null
+  deviceId: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Screen {

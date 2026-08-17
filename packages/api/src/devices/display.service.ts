@@ -16,9 +16,9 @@ import { Screen } from '../screens/screens.entity'
 import { fileExists } from '../utils/fileExists'
 import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
+import { buildTrmnlContext } from '../utils/templateContext'
 import { Device } from './devices.entity'
 import { Display } from './display'
-import { buildTrmnlContext } from '../utils/templateContext'
 import { DisplayScreen } from './displayScreen'
 
 interface TrmnlScreenResponse {
@@ -93,6 +93,11 @@ export class DeviceDisplayService {
     device.resetDevice = false
     const updateFirmware = false
     device.lastSeen = new Date()
+    // Save X-Buttons header if provided
+    if (headers['x-buttons']) {
+      const buttons = headers['x-buttons'].split(',').map(b => b.trim()).filter(Boolean)
+      device.buttons = buttons
+    }
     await this.deviceRepository.save(device)
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
     const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
@@ -184,7 +189,7 @@ export class DeviceDisplayService {
     }
   }
 
-  async getCurrentImageWithoutProgressing(headers: Pick<DisplayRequestHeadersDto, 'id' | 'access-token'>): Promise<DisplayScreen> {
+  async getCurrentImageWithoutProgressing(headers: Pick<DisplayRequestHeadersDto, 'id' | 'access-token' | 'x-buttons'>): Promise<DisplayScreen> {
     this.logger.log(`Current Screen request for MAC: ${headers.id}`)
     this.logger.debug(`Headers: ${JSON.stringify(headers)}`)
     const device = await this.deviceRepository.findOneBy({ mac: headers.id })
@@ -195,6 +200,12 @@ export class DeviceDisplayService {
     if (device.apikey !== headers['access-token']) {
       this.logger.warn(`Invalid API key for device: ${headers.id}`)
       throw new UnauthorizedException('Invalid API key')
+    }
+    // Save X-Buttons header if provided
+    if (headers['x-buttons']) {
+      const buttons = headers['x-buttons'].split(',').map(b => b.trim()).filter(Boolean)
+      device.buttons = buttons
+      await this.deviceRepository.save(device)
     }
     const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
@@ -288,7 +299,7 @@ export class DeviceDisplayService {
     return { response, localImageUrl: `${this.configService.get<string>('api_url')}/screens/devices/${device.id}/${pngFilename}` }
   }
 
-  private async generateScreenImage(screen: Screen, device: Device): Promise<string> {
+  async generateScreenImage(screen: Screen, device: Device): Promise<string> {
     let imgUrl: string | null = null
 
     // Handle mashup screen
@@ -540,11 +551,11 @@ export class DeviceDisplayService {
    * All screens have a filename set during creation (via device settings).
    * Spaces, hyphens, and underscores are converted to camelCase.
    */
-  private screenFilename(screen: Screen): string {
+  screenFilename(screen: Screen): string {
     const name = screen.filename ?? screen.type
     return name
       .replace(/[-_]/g, ' ')
-      .replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
       .replace(/\s+/g, '')
   }
 

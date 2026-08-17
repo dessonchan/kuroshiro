@@ -16,6 +16,6 @@ import { DeviceSetupService } from './setup.service'
   imports: [TypeOrmModule.forFeature([Device, Screen, LogEntry]), ConfigModule, PluginsModule],
   controllers: [DevicesController, DisplayController, SetupController],
   providers: [DevicesService, DeviceDisplayService, DeviceSetupService],
-  exports: [DevicesService],
+  exports: [DevicesService, DeviceDisplayService],
 })
 export class DevicesModule {}

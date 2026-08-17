@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
 import { VCol, VContainer, VRow } from 'vuetify/components'
+import ActionButtonCard from '@/components/ActionButtonCard.vue'
 import AddScreenCard from '@/components/AddScreenCard.vue'
 import DeviceInformationCard from '@/components/DeviceInformationCard.vue'
 import DeviceLogsCard from '@/components/DeviceLogsCard.vue'
@@ -42,6 +43,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="12" sm="12" md="5">
             <AddScreenCard :device-id="props.id" />
+            <ActionButtonCard :device-id="props.id" />
             <ScreenListCard :device-id="props.id" />
             <DeviceLogsCard :device-id="props.id" />
           </VCol>
