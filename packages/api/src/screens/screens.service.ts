@@ -138,6 +138,15 @@ export class ScreensService {
     // Reindex order for remaining screens, closing the gap left by the deleted screen
     const screens = await this.screensRepository.find({ where: { device: { id: deviceId } }, order: { order: 'ASC' } })
     await this.reindexScreens(screens)
+    // If the deleted screen was active, activate the first remaining screen
+    if (screen.isActive) {
+      const nextScreen = screens[0]
+      if (nextScreen) {
+        nextScreen.isActive = true
+        await this.screensRepository.save(nextScreen)
+        this.logger.log(`Activated next screen ${nextScreen.id} for device ${deviceId}`)
+      }
+    }
     this.logger.log(`Reindexed screen order for device ${deviceId}`)
   }
 

@@ -96,6 +96,14 @@ export class DeviceDisplayService {
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
     const activeScreen = await this.screenRepository.findOneBy({ device, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
+      // No active screen — activate the first screen in the playlist
+      const firstScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
+      if (firstScreen) {
+        firstScreen.isActive = true
+        await this.screenRepository.save(firstScreen)
+        this.logger.log(`No active screen, activated first screen ${firstScreen.id} for device ${device.id}`)
+        return this.getCurrentImage(headers)
+      }
       this.logger.log('No screen found returning default no screen image')
       return new Display({
         filename: 'noScreen.png',
@@ -189,6 +197,14 @@ export class DeviceDisplayService {
     }
     const activeScreen = await this.screenRepository.findOneBy({ device, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
+      // No active screen — activate the first screen in the playlist
+      const firstScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
+      if (firstScreen) {
+        firstScreen.isActive = true
+        await this.screenRepository.save(firstScreen)
+        this.logger.log(`No active screen, activated first screen ${firstScreen.id} for device ${device.id}`)
+        return this.getCurrentImageWithoutProgressing(headers)
+      }
       this.logger.log('No screen found returning default no screen image')
       return new DisplayScreen({
         filename: 'noScreen.png',
