@@ -9,7 +9,7 @@ export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async consumeLog(@Headers() headers: { id: string }, @Body() body: CreateLogDto) {
     this.logger.debug(`Got log ${JSON.stringify(body)}`)
     await this.logsService.addLogToDevice(headers.id, body)
