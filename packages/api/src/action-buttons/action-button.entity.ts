@@ -1,8 +1,8 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm'
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm'
 import { Device } from '../devices/devices.entity'
 
 @Entity()
-@Unique('IDX_action_button_device_button', ['device', 'button'])
+@Unique('IDX_action_button_device_button', ['deviceId', 'button'])
 export class ActionButton {
   @PrimaryGeneratedColumn('uuid')
   id: string
@@ -29,7 +29,11 @@ export class ActionButton {
   @Column('text', { nullable: true })
   webhookPayload?: string | null
 
+  @Column('uuid')
+  deviceId: string
+
   @ManyToOne(() => Device, device => device.actionButtons, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'deviceId' })
   device: Device
 
   @CreateDateColumn()
