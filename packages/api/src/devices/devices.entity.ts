@@ -1,4 +1,5 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm'
+import { ActionButton } from '../action-buttons/action-button.entity'
 import { LogEntry } from '../logs/logs.entity'
 import { Screen } from '../screens/screens.entity'
 
@@ -60,6 +61,12 @@ export class Device {
 
   @Column('timestamptz', { default: new Date() })
   lastSeen: Date
+
+  @Column('simple-json', { nullable: true })
+  buttons?: string[]
+
+  @OneToMany(() => ActionButton, actionButton => actionButton.device)
+  actionButtons: ActionButton[]
 
   @OneToMany(() => Screen, screen => screen.device)
   screens: Screen[]
