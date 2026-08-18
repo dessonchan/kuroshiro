@@ -6,6 +6,7 @@ import { Device } from '../devices/devices.entity'
 import { DeviceDisplayService } from '../devices/display.service'
 import { DisplayScreen } from '../devices/displayScreen'
 import { Screen } from '../screens/screens.entity'
+import { isInSchedule } from '../utils/schedule'
 import { ActionButton } from './action-button.entity'
 import { CreateActionButtonDto } from './dto/create-action-button.dto'
 import { UpdateActionButtonDto } from './dto/update-action-button.dto'
@@ -84,6 +85,12 @@ export class ActionButtonService {
         device.buttons = buttons
         await this.deviceRepository.save(device)
       }
+    }
+
+    // Respect device off-schedule: no action during sleep time
+    if (isInSchedule(device.offSchedule, device.timezone)) {
+      this.logger.log(`Device ${device.id} is in off-schedule, ignoring button "${button}"`)
+      return null
     }
 
     // Find the action config for this button

@@ -117,8 +117,10 @@ export interface MaintenanceStats {
   totalSize: number
 }
 
-export interface ScheduleConfig {
+export interface ScheduleRule {
   startTime: string  // "HH:mm" format, e.g. "23:00"
   endTime: string    // "HH:mm" format, e.g. "07:00"
   weekdays: number[] // 0=Sunday, 1=Monday, ..., 6=Saturday. Empty array = inactive
 }
+
+export type ScheduleConfig = ScheduleRule[] | null

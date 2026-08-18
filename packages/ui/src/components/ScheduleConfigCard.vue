@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import type { ScheduleConfig } from '@/types'
-import { mdiClockOutline } from '@mdi/js'
+import type { ScheduleConfig, ScheduleRule } from '@/types'
+import { mdiClockOutline, mdiPlus, mdiTrashCan } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
-import { VBtn, VCard, VCardText, VCardTitle, VCheckbox, VCol, VDivider, VRow, VSwitch, VTextField } from 'vuetify/components'
+import { VBtn, VCard, VCardText, VCardTitle, VCheckbox, VCol, VDivider, VIcon, VRow, VSwitch, VTextField } from 'vuetify/components'
 
 const props = defineProps<{
-  modelValue: ScheduleConfig | null
+  modelValue: ScheduleConfig
   timezone?: string
   hideActions?: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [value: ScheduleConfig | null]
+  'update:modelValue': [value: ScheduleConfig]
   'save': []
 }>()
 
@@ -25,47 +25,50 @@ const WEEKDAY_LABELS: { value: number, label: string }[] = [
   { value: 6, label: 'Sat' },
 ]
 
-const enabled = ref(props.modelValue !== null && (props.modelValue?.weekdays?.length ?? 0) > 0)
+const enabled = ref((props.modelValue?.length ?? 0) > 0)
+const localRules = ref<ScheduleRule[]>(
+  props.modelValue
+    ? props.modelValue.map(r => ({ ...r, weekdays: [...r.weekdays] }))
+    : [{ startTime: '23:00', endTime: '07:00', weekdays: [0, 1, 2, 3, 4, 5, 6] }],
+)
 
-const localStartTime = ref(props.modelValue?.startTime ?? '23:00')
-const localEndTime = ref(props.modelValue?.endTime ?? '07:00')
-const localWeekdays = ref<number[]>(props.modelValue?.weekdays ? [...props.modelValue.weekdays] : [])
-
-// Sync external modelValue changes into local state (e.g. when parent resets)
 watch(() => props.modelValue, (val) => {
-  if (val === null || !val.weekdays || val.weekdays.length === 0) {
+  if (!val || val.length === 0) {
     enabled.value = false
   }
   else {
     enabled.value = true
-    localStartTime.value = val.startTime
-    localEndTime.value = val.endTime
-    localWeekdays.value = [...val.weekdays]
+    localRules.value = val.map(r => ({ ...r, weekdays: [...r.weekdays] }))
   }
 }, { immediate: true })
 
-function onWeekdayToggle(day: number) {
-  const idx = localWeekdays.value.indexOf(day)
-  if (idx >= 0) {
-    localWeekdays.value.splice(idx, 1)
-  }
-  else {
-    localWeekdays.value.push(day)
-    localWeekdays.value.sort()
-  }
-  // If weekdays becomes empty, treat as disabled
-  if (localWeekdays.value.length === 0) {
+function addRule() {
+  localRules.value.push({ startTime: '09:00', endTime: '17:00', weekdays: [1, 2, 3, 4, 5] })
+}
+
+function removeRule(index: number) {
+  localRules.value.splice(index, 1)
+  if (localRules.value.length === 0) {
     enabled.value = false
   }
 }
 
+function onWeekdayToggle(rule: ScheduleRule, day: number) {
+  const idx = rule.weekdays.indexOf(day)
+  if (idx >= 0) {
+    rule.weekdays.splice(idx, 1)
+  }
+  else {
+    rule.weekdays.push(day)
+    rule.weekdays.sort()
+  }
+}
+
 function save() {
-  if (enabled.value && localWeekdays.value.length > 0) {
-    emit('update:modelValue', {
-      startTime: localStartTime.value,
-      endTime: localEndTime.value,
-      weekdays: [...localWeekdays.value],
-    })
+  if (enabled.value && localRules.value.some(r => r.weekdays.length > 0)) {
+    // Filter out rules with empty weekdays (inactive)
+    const validRules = localRules.value.filter(r => r.weekdays.length > 0)
+    emit('update:modelValue', validRules)
   }
   else {
     emit('update:modelValue', null)
@@ -83,25 +86,23 @@ const timeRules = [
   },
 ]
 
-const scheduleSummary = computed(() => {
-  if (!enabled.value)
-    return 'No schedule configured'
-  const dayLabels = localWeekdays.value.map(d => WEEKDAY_LABELS.find(w => w.value === d)?.label).filter(Boolean)
-  const crossesMidnight = localStartTime.value > localEndTime.value
-  return `${localStartTime.value} – ${localEndTime.value}${crossesMidnight ? ' (next day)' : ''}, ${dayLabels.length === 7 ? 'Every day' : dayLabels.join(', ')}`
-})
+function ruleSummary(rule: ScheduleRule): string {
+  const dayLabels = rule.weekdays.map(d => WEEKDAY_LABELS.find(w => w.value === d)?.label).filter(Boolean)
+  const crossesMidnight = rule.startTime > rule.endTime
+  return `${rule.startTime} – ${rule.endTime}${crossesMidnight ? ' (next day)' : ''}, ${dayLabels.length === 7 ? 'Every day' : dayLabels.join(', ')}`
+}
 
 const hasChanges = computed(() => {
   const current = props.modelValue
-  if (enabled.value && localWeekdays.value.length > 0) {
+  if (enabled.value && localRules.value.some(r => r.weekdays.length > 0)) {
+    const validRules = localRules.value.filter(r => r.weekdays.length > 0)
     if (!current)
       return true
-    return current.startTime !== localStartTime.value
-      || current.endTime !== localEndTime.value
-      || JSON.stringify(current.weekdays) !== JSON.stringify(localWeekdays.value)
+    if (current.length !== validRules.length)
+      return true
+    return JSON.stringify(current) !== JSON.stringify(validRules)
   }
-  // disabled state
-  return current !== null
+  return current !== null && current.length > 0
 })
 </script>
 
@@ -124,64 +125,98 @@ const hasChanges = computed(() => {
     <VDivider />
 
     <VCardText v-if="enabled">
-      <VRow density="comfortable">
-        <VCol cols="12" sm="6" md="4">
-          <VTextField
-            v-model="localStartTime"
-            label="Start Time"
-            placeholder="23:00"
-            density="compact"
-            :rules="timeRules"
-            hint="HH:mm format"
-            persistent-hint
-          />
-        </VCol>
-        <VCol cols="12" sm="6" md="4">
-          <VTextField
-            v-model="localEndTime"
-            label="End Time"
-            placeholder="07:00"
-            density="compact"
-            :rules="timeRules"
-            hint="HH:mm format (start > end crosses midnight)"
-            persistent-hint
-          />
-        </VCol>
-        <VCol v-if="timezone" cols="12" md="4" class="d-flex align-center">
-          <span class="text-body-2 text-medium-emphasis">Timezone: <strong>{{ timezone }}</strong></span>
-        </VCol>
-      </VRow>
-
-      <div class="mt-4">
-        <div class="text-body-2 text-medium-emphasis mb-2">Active Days</div>
-        <div class="d-flex flex-wrap ga-2">
-          <VCheckbox
-            v-for="day in WEEKDAY_LABELS"
-            :key="day.value"
-            :model-value="localWeekdays.includes(day.value)"
-            :label="day.label"
-            density="compact"
-            hide-details
-            color="secondary"
-            @update:model-value="onWeekdayToggle(day.value)"
-          />
+      <div
+        v-for="(rule, index) in localRules"
+        :key="index"
+        class="rule-block"
+      >
+        <div class="d-flex align-center justify-space-between mb-2">
+          <span class="text-body-2 text-medium-emphasis">Rule {{ index + 1 }}</span>
+          <VBtn
+            v-if="localRules.length > 1"
+            icon
+            variant="text"
+            size="small"
+            :prepend-icon="mdiTrashCan"
+            color="error"
+            @click="removeRule(index)"
+          >
+            <VIcon :icon="mdiTrashCan" size="16" />
+          </VBtn>
         </div>
+
+        <VRow density="comfortable">
+          <VCol cols="12" sm="6" md="4">
+            <VTextField
+              v-model="rule.startTime"
+              label="Start Time"
+              placeholder="23:00"
+              density="compact"
+              :rules="timeRules"
+              hint="HH:mm format"
+              persistent-hint
+            />
+          </VCol>
+          <VCol cols="12" sm="6" md="4">
+            <VTextField
+              v-model="rule.endTime"
+              label="End Time"
+              placeholder="07:00"
+              density="compact"
+              :rules="timeRules"
+              hint="HH:mm (start > end crosses midnight)"
+              persistent-hint
+            />
+          </VCol>
+          <VCol v-if="timezone && index === 0" cols="12" md="4" class="d-flex align-center">
+            <span class="text-body-2 text-medium-emphasis">Timezone: <strong>{{ timezone }}</strong></span>
+          </VCol>
+        </VRow>
+
+        <div class="mt-2">
+          <div class="text-body-2 text-medium-emphasis mb-1">Active Days</div>
+          <div class="d-flex flex-wrap ga-2">
+            <VCheckbox
+              v-for="day in WEEKDAY_LABELS"
+              :key="day.value"
+              :model-value="rule.weekdays.includes(day.value)"
+              :label="day.label"
+              density="compact"
+              hide-details
+              color="secondary"
+              @update:model-value="onWeekdayToggle(rule, day.value)"
+            />
+          </div>
+        </div>
+
+        <div class="mt-2 text-body-2 text-medium-emphasis">
+          {{ ruleSummary(rule) }}
+        </div>
+
+        <VDivider v-if="index < localRules.length - 1" class="mt-3" />
       </div>
 
-      <div class="mt-4 text-body-2 text-medium-emphasis">
-        {{ scheduleSummary }}
-      </div>
+      <VBtn
+        variant="tonal"
+        color="secondary"
+        size="small"
+        :prepend-icon="mdiPlus"
+        class="mt-3"
+        @click="addRule"
+      >
+        Add Rule
+      </VBtn>
     </VCardText>
 
     <VCardText v-else>
       <div class="text-center text-disabled py-4">
-        No schedule configured. Enable the switch above to set an active schedule.
+        No schedule configured. Enable the switch above to set active schedules.
       </div>
     </VCardText>
 
     <VDivider v-if="hasChanges && !hideActions" />
     <VCardText v-if="hasChanges && !hideActions" class="d-flex justify-end ga-2">
-      <VBtn variant="text" @click="enabled = !!(props.modelValue?.weekdays?.length); localStartTime = props.modelValue?.startTime ?? '23:00'; localEndTime = props.modelValue?.endTime ?? '07:00'; localWeekdays = props.modelValue?.weekdays ? [...props.modelValue.weekdays] : []">
+      <VBtn variant="text" @click="enabled = (props.modelValue?.length ?? 0) > 0; localRules = props.modelValue ? props.modelValue.map(r => ({ ...r, weekdays: [...r.weekdays] })) : [{ startTime: '23:00', endTime: '07:00', weekdays: [0, 1, 2, 3, 4, 5, 6] }]">
         Cancel
       </VBtn>
       <VBtn color="primary" variant="tonal" @click="save">
@@ -190,3 +225,12 @@ const hasChanges = computed(() => {
     </VCardText>
   </VCard>
 </template>
+
+<style scoped>
+.rule-block {
+  padding: 12px 0;
+}
+.rule-block:not(:last-child) {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+</style>
