@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator'
+import { IsNumber, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator'
 import { Type } from 'class-transformer'
 import { ScheduleConfig } from '../../schedule-config.interface'
 
@@ -13,24 +13,14 @@ class ScheduleConfigDto implements ScheduleConfig {
   weekdays: number[]
 }
 
-export class CreateScreenDto {
+export class UpdateScreenDto {
+  @IsOptional()
   @IsString()
-  filename: string
+  filename?: string
 
   @IsOptional()
   @IsString()
-  externalLink?: string
-
-  @IsString()
-  deviceId: string
-
-  @IsOptional()
-  @IsBoolean()
-  fetchManual: boolean
-
-  @IsOptional()
-  @IsString()
-  html: string
+  html?: string
 
   @ValidateIf((o) => o.enableSchedule !== null && o.enableSchedule !== undefined)
   @ValidateNested()

@@ -9,6 +9,7 @@ import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
 import { assertPublicUrl } from '../utils/ssrfGuard'
 import { CreateScreenDto } from './dto/create-screen.dto'
+import { UpdateScreenDto } from './dto/update-screen.dto'
 import { Screen } from './screens.entity'
 
 @Injectable()
@@ -197,6 +198,17 @@ export class ScreensService {
         await repository.save(screens[i])
       }
     }
+  }
+
+  async update(id: string, body: UpdateScreenDto): Promise<Screen> {
+    this.logger.log(`Updating screen ${id}`)
+    const screen = await this.screensRepository.findOne({ where: { id } })
+    if (!screen) {
+      this.logger.warn(`Screen not found: ${id}`)
+      throw new NotFoundException('Screen not found')
+    }
+    Object.assign(screen, body)
+    return this.screensRepository.save(screen)
   }
 
   async updateExternalScreen(id: string) {

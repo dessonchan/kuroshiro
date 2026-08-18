@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator'
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, ValidateNested, ValidateIf } from 'class-validator'
 import { Type } from 'class-transformer'
 import { ScheduleConfig } from '../../schedule-config.interface'
 
@@ -88,7 +88,7 @@ export class UpdateDeviceDto {
   @IsBoolean()
   updateFirmware: boolean
 
-  @IsOptional()
+  @ValidateIf((o) => o.offSchedule !== null && o.offSchedule !== undefined)
   @ValidateNested()
   @Type(() => ScheduleConfigDto)
   offSchedule?: ScheduleConfigDto | null
