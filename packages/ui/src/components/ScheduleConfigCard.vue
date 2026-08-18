@@ -33,6 +33,9 @@ const localRules = ref<ScheduleRule[]>(
 )
 
 watch(() => props.modelValue, (val) => {
+  // In hideActions mode, skip external sync — we drive the parent, not vice versa
+  if (props.hideActions)
+    return
   if (!val || val.length === 0) {
     enabled.value = false
   }
