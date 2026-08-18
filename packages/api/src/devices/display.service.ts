@@ -587,3 +587,72 @@ export class DeviceDisplayService {
           finalHtml = portraitStyles + html
         }
       }
+
+      await page.setContent(finalHtml, { waitUntil: 'load' })
+      const image: Uint8Array = await page.screenshot()
+
+      const destDir = resolveAppPath('public', 'screens', 'devices', device.id)
+      const inputPath = path.join(destDir, 'tmp-source')
+      await fs.promises.mkdir(destDir, { recursive: true })
+      await fs.promises.writeFile(inputPath, buffer.Buffer.from(image))
+      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
+      return this.screenImageUrl(device, screen)
+    }
+    finally {
+      await browser.close()
+    }
+  }
+
+  private wrapInTrmnlShell(html: string): string {
+    return `
+    <html>
+      <head>
+        <link rel="stylesheet" href="https://usetrmnl.com/css/latest/plugins.css">
+        <script src="https://usetrmnl.com/js/latest/plugins.js"></script>
+      </head>
+      <body class="environment trmnl">
+        <div class="screen">
+          <div class="view view--full">
+            ${html}
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+  }
+
+  private async cachePluginOutput(screen: Screen, renderedHtml: string): Promise<void> {
+    const generatedAt = new Date()
+    await this.screenRepository.update({ id: screen.id }, { cachedPluginOutput: renderedHtml, generatedAt })
+    screen.generatedAt = generatedAt
+  }
+
+  private screenImagePath(device: Device, screen: Screen): string {
+    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
+  }
+
+  private screenSourcePath(device: Device, screen: Screen): string {
+    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}-source`)
+  }
+
+  /**
+   * Derive a meaningful filename for the screen response.
+   * All screens have a filename set during creation (via device settings).
+   * Spaces, hyphens, and underscores are converted to camelCase.
+   */
+  screenFilename(screen: Screen): string {
+    const name = screen.filename ?? screen.type
+    return name
+      .replace(/[-_]/g, ' ')
+      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/\s+/g, '')
+  }
+
+  private screenImageUrl(device: Device, screen: Screen): string {
+    return `${this.configService.get<string>('api_url')}/screens/devices/${device.id}/${screen.id}.png`
+  }
+
+  private errorImageUrl(): string {
+    return `${this.configService.get<string>('api_url')}/screens/error.png`
+  }
+}
