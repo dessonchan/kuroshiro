@@ -30,7 +30,7 @@ export class ScreensController {
   }
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  @UsePipes(new ValidationPipe({ transform: true }))
   @UseInterceptors(FileInterceptor('file'))
   async add(@Body() body: CreateScreenDto, @UploadedFile() file?: any): Promise<Screen> {
     if (file && this.configService.get<string>('demo_mode'))
@@ -50,7 +50,7 @@ export class ScreensController {
   }
 
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  @UsePipes(new ValidationPipe({ transform: true }))
   async update(@Param('id') id: string, @Body() body: UpdateScreenDto): Promise<Screen> {
     return this.screensService.update(id, body)
   }

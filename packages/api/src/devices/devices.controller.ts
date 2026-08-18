@@ -51,7 +51,7 @@ export class DevicesController {
   }
 
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  @UsePipes(new ValidationPipe({ transform: true }))
   async update(@Param('id') id: string, @Body() newDevice: UpdateDeviceDto): Promise<void> {
     const dbDevice = await this.devicesService.findById(id)
     if (!dbDevice) {
