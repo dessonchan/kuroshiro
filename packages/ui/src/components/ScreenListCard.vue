@@ -408,6 +408,7 @@ async function saveSchedule() {
           <ScheduleConfigCard
             v-model="scheduleEditValue"
             :timezone="device?.timezone"
+            :hide-actions="true"
           />
         </VCardText>
         <VDivider />
