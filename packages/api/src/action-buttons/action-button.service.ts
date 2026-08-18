@@ -65,6 +65,9 @@ export class ActionButtonService {
    * Handle a button press from a device.
    * Authenticates the device, finds the action config for that button,
    * and executes the action (display a screen or fire a webhook).
+   *
+   * NOTE: Action buttons RESPECT device off-schedule (no display during off time)
+   * but IGNORE screen enable-schedule (manual press forces display).
    */
   async handleAction(button: string, mac: string, apikey: string, xButtons?: string): Promise<DisplayScreen | null> {
     // Authenticate device

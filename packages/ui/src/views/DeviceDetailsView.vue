@@ -5,6 +5,7 @@ import ActionButtonCard from '@/components/ActionButtonCard.vue'
 import AddScreenCard from '@/components/AddScreenCard.vue'
 import DeviceInformationCard from '@/components/DeviceInformationCard.vue'
 import DeviceLogsCard from '@/components/DeviceLogsCard.vue'
+import DeviceSleepScheduleCard from '@/components/DeviceSleepScheduleCard.vue'
 import ScreenListCard from '@/components/ScreenListCard.vue'
 import ScreenPreviewCard from '@/components/ScreenPreviewCard.vue'
 import { useDeviceStore } from '@/stores/device'
@@ -43,6 +44,7 @@ onMounted(() => {
           </VCol>
           <VCol cols="12" sm="12" md="5">
             <AddScreenCard :device-id="props.id" />
+            <DeviceSleepScheduleCard :device-id="props.id" />
             <ActionButtonCard :device-id="props.id" />
             <ScreenListCard :device-id="props.id" />
             <DeviceLogsCard :device-id="props.id" />

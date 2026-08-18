@@ -17,6 +17,7 @@ import { fileExists } from '../utils/fileExists'
 import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
 import { buildTrmnlContext } from '../utils/templateContext'
+import { isInSchedule, secondsUntilScheduleEnd } from '../utils/schedule'
 import { Device } from './devices.entity'
 import { Display } from './display'
 import { DisplayScreen } from './displayScreen'
@@ -100,14 +101,60 @@ export class DeviceDisplayService {
     }
     await this.deviceRepository.save(device)
     this.logger.log(`Device info updated for MAC: ${headers.id}`)
+
+    // === Schedule checks ===
+    // 1. Check if device is in off-schedule period (highest priority)
+    if (isInSchedule(device.offSchedule, device.timezone)) {
+      this.logger.log(`Device ${device.id} is in off-schedule period`)
+
+      // Try to render screen saver if configured
+      if (device.screenSaverScreenId) {
+        const screenSaver = await this.screenRepository.findOneBy({ id: device.screenSaverScreenId, device: { id: device.id } })
+        if (screenSaver) {
+          this.logger.log(`Device ${device.id} showing screen saver ${screenSaver.id}`)
+          const imgUrl = await this.generateScreenImage(screenSaver, device)
+          // Dynamic refresh_rate: min(10x base, seconds until off-schedule ends)
+          const secondsToEnd = secondsUntilScheduleEnd(device.offSchedule!, device.timezone)
+          const refreshRate = Math.min(device.refreshRate * 10, secondsToEnd)
+          return new Display({
+            filename: `${this.screenFilename(screenSaver)}_${screenSaver.generatedAt.toISOString()}`,
+            firmware_url: '',
+            image_url: imgUrl,
+            refresh_rate: Math.max(refreshRate, 60), // minimum 60s
+            reset_firmware: resetDevice,
+            special_function: device.specialFunction,
+            update_firmware: updateFirmware,
+          })
+        }
+      }
+
+      // No screen saver — return noScreen.png with slow refresh
+      const secondsToEnd = secondsUntilScheduleEnd(device.offSchedule!, device.timezone)
+      const refreshRate = Math.min(device.refreshRate * 10, secondsToEnd)
+      this.logger.log(`Device ${device.id} in off-schedule with no screen saver, returning noScreen.png`)
+      return new Display({
+        filename: 'noScreen.png',
+        firmware_url: '',
+        image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
+        refresh_rate: Math.max(refreshRate, 60),
+        reset_firmware: resetDevice,
+        special_function: device.specialFunction,
+        update_firmware: updateFirmware,
+      })
+    }
+
     const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
-      // No active screen — activate the first screen in the playlist
-      const firstScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
-      if (firstScreen) {
-        firstScreen.isActive = true
-        await this.screenRepository.save(firstScreen)
-        this.logger.log(`No active screen, activated first screen ${firstScreen.id} for device ${device.id}`)
+      // No active screen — activate the first enabled screen in the playlist
+      const screens = await this.screenRepository.find({
+        where: { device: { id: device.id } },
+        order: { order: 'ASC' },
+      })
+      const enabledScreen = screens.find(s => this.isScreenEnabled(s, device.timezone))
+      if (enabledScreen) {
+        enabledScreen.isActive = true
+        await this.screenRepository.save(enabledScreen)
+        this.logger.log(`No active screen, activated first enabled screen ${enabledScreen.id} for device ${device.id}`)
         return this.getCurrentImage(headers)
       }
       this.logger.log('No screen found returning default no screen image')
@@ -123,12 +170,40 @@ export class DeviceDisplayService {
     }
     if (!device.mirrorEnabled) {
       this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
-      await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
-      let nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: activeScreen.order + 1 })
-      if (!nextScreen) {
-        this.logger.log(`No next screen found, cycling to first screen for device ${device.id}`)
-        nextScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
+      // Get all screens for this device, ordered by their playlist order
+      const screens = await this.screenRepository.find({
+        where: { device: { id: device.id } },
+        order: { order: 'ASC' },
+      })
+
+      // Find the next enabled screen after the current active one
+      const currentIndex = screens.findIndex(s => s.id === activeScreen.id)
+      let nextScreen: Screen | null = null
+
+      // Search forward from current position, then wrap around
+      for (let offset = 1; offset <= screens.length; offset++) {
+        const candidate = screens[(currentIndex + offset) % screens.length]
+        if (this.isScreenEnabled(candidate, device.timezone)) {
+          nextScreen = candidate
+          break
+        }
       }
+
+      if (!nextScreen) {
+        // All screens disabled — return noScreen.png
+        this.logger.log(`All screens disabled for device ${device.id}, returning noScreen.png`)
+        return new Display({
+          filename: 'noScreen.png',
+          firmware_url: '',
+          image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
+          refresh_rate: device.refreshRate,
+          reset_firmware: false,
+          special_function: device.specialFunction,
+          update_firmware: false,
+        })
+      }
+
+      await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
       nextScreen.isActive = true
       await this.screenRepository.save(nextScreen)
       this.logger.log(`Returning screen ${nextScreen.id} for device ${device.id}`)
@@ -187,6 +262,18 @@ export class DeviceDisplayService {
         update_firmware: updateFirmware,
       })
     }
+  }
+
+  /**
+   * Check if a screen is currently enabled based on its enableSchedule.
+   * null schedule = always enabled.
+   * Empty weekdays = schedule disabled (inactive).
+   * Otherwise, screen is enabled when current time is WITHIN the schedule.
+   */
+  private isScreenEnabled(screen: Screen, timezone: string): boolean {
+    if (!screen.enableSchedule)
+      return true // No schedule = always enabled
+    return isInSchedule(screen.enableSchedule, timezone)
   }
 
   async getCurrentImageWithoutProgressing(headers: Pick<DisplayRequestHeadersDto, 'id' | 'access-token' | 'x-buttons'>): Promise<DisplayScreen> {
@@ -274,6 +361,8 @@ export class DeviceDisplayService {
       rendered_at: device.mirrorEnabled ? undefined : activeScreen.generatedAt,
     })
   }
+
+  // ... rest of the methods remain unchanged ...
 
   private async fetchAndStoreMirrorImage(device: Device, proxyHeaders?: DisplayRequestHeadersDto): Promise<{ response: TrmnlScreenResponse, localImageUrl: string }> {
     const mirrorHeaders = proxyHeaders
@@ -498,72 +587,3 @@ export class DeviceDisplayService {
           finalHtml = portraitStyles + html
         }
       }
-
-      await page.setContent(finalHtml, { waitUntil: 'load' })
-      const image: Uint8Array = await page.screenshot()
-
-      const destDir = resolveAppPath('public', 'screens', 'devices', device.id)
-      const inputPath = path.join(destDir, 'tmp-source')
-      await fs.promises.mkdir(destDir, { recursive: true })
-      await fs.promises.writeFile(inputPath, buffer.Buffer.from(image))
-      await convertToPng(inputPath, this.screenImagePath(device, screen), device.width, device.height, device.rotation, this.logger)
-      return this.screenImageUrl(device, screen)
-    }
-    finally {
-      await browser.close()
-    }
-  }
-
-  private wrapInTrmnlShell(html: string): string {
-    return `
-    <html>
-      <head>
-        <link rel="stylesheet" href="https://usetrmnl.com/css/latest/plugins.css">
-        <script src="https://usetrmnl.com/js/latest/plugins.js"></script>
-      </head>
-      <body class="environment trmnl">
-        <div class="screen">
-          <div class="view view--full">
-            ${html}
-          </div>
-        </div>
-      </body>
-    </html>
-  `
-  }
-
-  private async cachePluginOutput(screen: Screen, renderedHtml: string): Promise<void> {
-    const generatedAt = new Date()
-    await this.screenRepository.update({ id: screen.id }, { cachedPluginOutput: renderedHtml, generatedAt })
-    screen.generatedAt = generatedAt
-  }
-
-  private screenImagePath(device: Device, screen: Screen): string {
-    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
-  }
-
-  private screenSourcePath(device: Device, screen: Screen): string {
-    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}-source`)
-  }
-
-  /**
-   * Derive a meaningful filename for the screen response.
-   * All screens have a filename set during creation (via device settings).
-   * Spaces, hyphens, and underscores are converted to camelCase.
-   */
-  screenFilename(screen: Screen): string {
-    const name = screen.filename ?? screen.type
-    return name
-      .replace(/[-_]/g, ' ')
-      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
-      .replace(/\s+/g, '')
-  }
-
-  private screenImageUrl(device: Device, screen: Screen): string {
-    return `${this.configService.get<string>('api_url')}/screens/devices/${device.id}/${screen.id}.png`
-  }
-
-  private errorImageUrl(): string {
-    return `${this.configService.get<string>('api_url')}/screens/error.png`
-  }
-}
