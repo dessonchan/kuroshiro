@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { CreateScreenDto } from './dto/create-screen.dto'
 import { ReorderScreensDto } from './dto/reorder-screens.dto'
+import { UpdateScreenDto } from './dto/update-screen.dto'
 import { Screen } from './screens.entity'
 import { ScreensService } from './screens.service'
 
@@ -46,6 +47,12 @@ export class ScreensController {
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async reorder(@Param('deviceId') deviceId: string, @Body() body: ReorderScreensDto): Promise<Screen[]> {
     return this.screensService.reorder(deviceId, body.screenIds)
+  }
+
+  @Patch(':id')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async update(@Param('id') id: string, @Body() body: UpdateScreenDto): Promise<Screen> {
+    return this.screensService.update(id, body)
   }
 
   @Delete(':id')
