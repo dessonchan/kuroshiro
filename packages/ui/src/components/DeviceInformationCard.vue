@@ -229,9 +229,6 @@ async function saveDevice() {
     mirrorApikey: device.value.mirrorApikey,
     specialFunction: device.value.specialFunction,
     rotation: device.value.rotation,
-    offSchedule: device.value.offSchedule,
-    timezone: device.value.timezone,
-    screenSaverScreenId: device.value.screenSaverScreenId,
   })
 }
 const nameEditing = ref(false)

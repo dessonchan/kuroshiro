@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ScheduleConfig } from '@/types'
-import { mdiPowerSleep } from '@mdi/js'
-import { computed } from 'vue'
-import { VCard, VCardText, VCardTitle, VCol, VDivider, VRow, VSelect } from 'vuetify/components'
+import { mdiContentSave } from '@mdi/js'
+import { computed, ref, watch } from 'vue'
+import { VBtn, VCard, VCardText, VCardTitle, VCol, VDivider, VRow, VSelect } from 'vuetify/components'
 import ScheduleConfigCard from '@/components/ScheduleConfigCard.vue'
 import { useDeviceStore } from '@/stores/device'
 import { useScreensStore } from '@/stores/screens'
@@ -36,54 +36,65 @@ const screenSaverOptions = computed(() => {
   return [{ title: 'None', value: null }, ...screens]
 })
 
-const offSchedule = computed<ScheduleConfig | null>({
-  get() {
-    return device.value?.offSchedule ?? null
-  },
-  set(value: ScheduleConfig | null) {
-    if (!device.value) return
-    deviceStore.updateDevice(device.value.id, { offSchedule: value })
-  },
+// Local state for editing
+const localOffSchedule = ref<ScheduleConfig | null>(device.value?.offSchedule ? { ...device.value.offSchedule, weekdays: [...device.value.offSchedule.weekdays] } : null)
+const localTimezone = ref(device.value?.timezone ?? 'UTC')
+const localScreenSaverScreenId = ref<string | null>(device.value?.screenSaverScreenId ?? null)
+
+// Sync device changes into local state
+watch(() => device.value, (dev) => {
+  if (!dev)
+    return
+  localOffSchedule.value = dev.offSchedule ? { ...dev.offSchedule, weekdays: [...dev.offSchedule.weekdays] } : null
+  localTimezone.value = dev.timezone ?? 'UTC'
+  localScreenSaverScreenId.value = dev.screenSaverScreenId ?? null
+}, { immediate: true })
+
+const hasChanges = computed(() => {
+  const dev = device.value
+  if (!dev)
+    return false
+  const scheduleChanged = JSON.stringify(localOffSchedule.value) !== JSON.stringify(dev.offSchedule)
+  const tzChanged = localTimezone.value !== (dev.timezone ?? 'UTC')
+  const ssChanged = localScreenSaverScreenId.value !== (dev.screenSaverScreenId ?? null)
+  return scheduleChanged || tzChanged || ssChanged
 })
 
-const timezone = computed<string>({
-  get() {
-    return device.value?.timezone ?? 'UTC'
-  },
-  set(value: string) {
-    if (!device.value) return
-    deviceStore.updateDevice(device.value.id, { timezone: value })
-  },
-})
+async function save() {
+  if (!device.value)
+    return
+  await deviceStore.updateDevice(device.value.id, {
+    offSchedule: localOffSchedule.value,
+    timezone: localTimezone.value,
+    screenSaverScreenId: localScreenSaverScreenId.value,
+  })
+}
 
-const screenSaverScreenId = computed<string | null>({
-  get() {
-    return device.value?.screenSaverScreenId ?? null
-  },
-  set(value: string | null) {
-    if (!device.value) return
-    deviceStore.updateDevice(device.value.id, { screenSaverScreenId: value })
-  },
-})
+function cancel() {
+  const dev = device.value
+  if (!dev)
+    return
+  localOffSchedule.value = dev.offSchedule ? { ...dev.offSchedule, weekdays: [...dev.offSchedule.weekdays] } : null
+  localTimezone.value = dev.timezone ?? 'UTC'
+  localScreenSaverScreenId.value = dev.screenSaverScreenId ?? null
+}
 </script>
 
 <template>
   <VCard v-if="device" elevation="1" class="mb-6">
     <VCardTitle class="d-flex align-center ga-2">
-      <VIcon :icon="mdiPowerSleep" size="20" />
       Sleep Schedule
     </VCardTitle>
     <VDivider />
     <VCardText>
       <ScheduleConfigCard
-        v-model="offSchedule"
-        :timezone="timezone"
+        v-model="localOffSchedule"
       />
 
       <VRow density="comfortable" class="mt-2">
         <VCol cols="12" sm="6">
           <VSelect
-            v-model="timezone"
+            v-model="localTimezone"
             :items="timezoneOptions"
             density="compact"
             label="Timezone"
@@ -93,7 +104,7 @@ const screenSaverScreenId = computed<string | null>({
         </VCol>
         <VCol cols="12" sm="6">
           <VSelect
-            v-model="screenSaverScreenId"
+            v-model="localScreenSaverScreenId"
             :items="screenSaverOptions"
             density="compact"
             label="Screen Saver"
@@ -103,5 +114,17 @@ const screenSaverScreenId = computed<string | null>({
         </VCol>
       </VRow>
     </VCardText>
+
+    <template v-if="hasChanges">
+      <VDivider />
+      <VCardText class="d-flex justify-end ga-2">
+        <VBtn variant="text" @click="cancel">
+          Cancel
+        </VBtn>
+        <VBtn color="primary" variant="tonal" :prepend-icon="mdiContentSave" @click="save">
+          Save
+        </VBtn>
+      </VCardText>
+    </template>
   </VCard>
 </template>
