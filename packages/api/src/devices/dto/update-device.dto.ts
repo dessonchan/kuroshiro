@@ -1,17 +1,4 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, ValidateNested, ValidateIf } from 'class-validator'
-import { Type } from 'class-transformer'
-import { ScheduleConfig } from '../../schedule-config.interface'
-
-class ScheduleConfigDto implements ScheduleConfig {
-  @IsString()
-  startTime: string
-
-  @IsString()
-  endTime: string
-
-  @IsNumber({ each: true })
-  weekdays: number[]
-}
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class UpdateDeviceDto {
   @IsOptional()
@@ -88,16 +75,13 @@ export class UpdateDeviceDto {
   @IsBoolean()
   updateFirmware: boolean
 
-  @ValidateIf((o) => o.offSchedule !== null && o.offSchedule !== undefined)
-  @ValidateNested()
-  @Type(() => ScheduleConfigDto)
-  offSchedule?: ScheduleConfigDto | null
+  @IsOptional()
+  offSchedule?: any
 
   @IsOptional()
   @IsString()
   timezone?: string
 
   @IsOptional()
-  @IsString()
   screenSaverScreenId?: string | null
 }

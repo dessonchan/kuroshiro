@@ -1,92 +1,108 @@
-import type { ScheduleConfig } from './schedule-config.interface'
+import type { ScheduleConfig, ScheduleRule } from '../schedule-config.interface'
 
 /**
- * Check if the current time falls within a schedule config.
- * Handles midnight crossing (e.g. 23:00–07:00).
- * Weekdays: 0=Sunday, 1=Monday, ..., 6=Saturday (matches JS Date.getDay()).
- * Empty weekdays array or null schedule = inactive.
+ * Parse "HH:mm" into minutes since midnight.
  */
-export function isInSchedule(schedule: ScheduleConfig | null | undefined, timezone: string): boolean {
-  if (!schedule || !schedule.weekdays || schedule.weekdays.length === 0)
-    return false
+function parseTimeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
 
+/**
+ * Get current weekday (0=Sunday) and minutes since midnight in the given timezone.
+ */
+function nowInTimezone(timezone: string): { weekday: number, minutes: number } {
   const now = new Date()
-  const tz = timezone || 'UTC'
-
-  // Get current time and weekday in the device timezone
+  // Use Intl to get the time in the target timezone
   const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false,
+    timeZone: timezone || 'UTC',
     weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   })
   const parts = formatter.formatToParts(now)
-  const hour = Number(parts.find(p => p.type === 'hour')!.value)
-  const minute = Number(parts.find(p => p.type === 'minute')!.value)
-  const currentMinutes = hour * 60 + minute
-
-  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
-  const weekdayPart = parts.find(p => p.type === 'weekday')!.value
-  const currentDay = dayMap[weekdayPart]
-  if (currentDay === undefined || !schedule.weekdays.includes(currentDay))
-    return false
-
-  const [startH, startM] = schedule.startTime.split(':').map(Number)
-  const [endH, endM] = schedule.endTime.split(':').map(Number)
-  const startMinutes = startH * 60 + startM
-  const endMinutes = endH * 60 + endM
-
-  if (startMinutes <= endMinutes) {
-    // Same day range: e.g. 09:00–17:00
-    return currentMinutes >= startMinutes && currentMinutes < endMinutes
+  const weekdayMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
   }
-  else {
-    // Crosses midnight: e.g. 23:00–07:00
-    return currentMinutes >= startMinutes || currentMinutes < endMinutes
+  const weekdayStr = parts.find(p => p.type === 'weekday')?.value ?? 'Sun'
+  const hourStr = parts.find(p => p.type === 'hour')?.value ?? '0'
+  const minuteStr = parts.find(p => p.type === 'minute')?.value ?? '0'
+  const hour = Number.parseInt(hourStr, 10)
+  const minute = Number.parseInt(minuteStr, 10)
+  return {
+    weekday: weekdayMap[weekdayStr] ?? 0,
+    minutes: hour * 60 + minute,
   }
 }
 
 /**
- * Calculate seconds remaining until the end of a schedule.
- * Returns 0 if not currently in schedule.
+ * Check if a single rule matches the current time.
  */
-export function secondsUntilScheduleEnd(schedule: ScheduleConfig, timezone: string): number {
-  const now = new Date()
-  const tz = timezone || 'UTC'
+function ruleMatches(rule: ScheduleRule, weekday: number, minutes: number): boolean {
+  // Check weekday
+  if (rule.weekdays.length === 0)
+    return false // empty weekdays = inactive
+  if (!rule.weekdays.includes(weekday))
+    return false
 
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false,
-  })
-  const parts = formatter.formatToParts(now)
-  const hour = Number(parts.find(p => p.type === 'hour')!.value)
-  const minute = Number(parts.find(p => p.type === 'minute')!.value)
-  const currentMinutes = hour * 60 + minute
+  const start = parseTimeToMinutes(rule.startTime)
+  const end = parseTimeToMinutes(rule.endTime)
 
-  const [startH, startM] = schedule.startTime.split(':').map(Number)
-  const [endH, endM] = schedule.endTime.split(':').map(Number)
-  const startMinutes = startH * 60 + startM
-  const endMinutes = endH * 60 + endM
-
-  let minutesUntilEnd: number
-  if (startMinutes <= endMinutes) {
-    // Same day range
-    minutesUntilEnd = endMinutes - currentMinutes
+  if (start <= end) {
+    // Same day: e.g. 09:00–17:00
+    return minutes >= start && minutes < end
   }
   else {
-    // Crosses midnight
-    if (currentMinutes >= startMinutes) {
-      // We're after start, end is tomorrow
-      minutesUntilEnd = (24 * 60 - currentMinutes) + endMinutes
+    // Crosses midnight: e.g. 23:00–07:00
+    return minutes >= start || minutes < end
+  }
+}
+
+/**
+ * Check if the current time falls within any rule of the schedule config.
+ * null or empty array = no schedule = not "in schedule" (always on/enabled).
+ */
+export function isInSchedule(schedule: ScheduleConfig, timezone: string): boolean {
+  if (!schedule || schedule.length === 0)
+    return false
+
+  const { weekday, minutes } = nowInTimezone(timezone)
+  return schedule.some(rule => ruleMatches(rule, weekday, minutes))
+}
+
+/**
+ * Calculate seconds until the soonest matching rule ends.
+ * Used for dynamic refresh_rate during off/sleep periods.
+ * Returns a large number if no rule is currently active.
+ */
+export function secondsUntilScheduleEnd(schedule: ScheduleConfig, timezone: string): number {
+  if (!schedule || schedule.length === 0)
+    return 3600
+
+  const { weekday, minutes } = nowInTimezone(timezone)
+  let minSeconds = Infinity
+
+  for (const rule of schedule) {
+    if (!ruleMatches(rule, weekday, minutes))
+      continue
+
+    const end = parseTimeToMinutes(rule.endTime)
+    const nowSeconds = minutes * 60
+
+    if (end > minutes) {
+      // Ends later today
+      const seconds = end * 60 - nowSeconds
+      if (seconds < minSeconds)
+        minSeconds = seconds
     }
     else {
-      // We're before end, end is later today
-      minutesUntilEnd = endMinutes - currentMinutes
+      // Ends tomorrow (crosses midnight)
+      const seconds = (24 * 60 - minutes + end) * 60
+      if (seconds < minSeconds)
+        minSeconds = seconds
     }
   }
 
-  return minutesUntilEnd * 60
+  return minSeconds === Infinity ? 3600 : Math.max(60, minSeconds)
 }

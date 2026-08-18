@@ -127,11 +127,13 @@ function previewScreen(screen: Screen) {
 // Schedule editing
 const showScheduleDialog = ref(false)
 const scheduleEditScreen = ref<Screen | null>(null)
-const scheduleEditValue = ref<ScheduleConfig | null>(null)
+const scheduleEditValue = ref<ScheduleConfig>(null)
 
 function openScheduleDialog(screen: Screen) {
   scheduleEditScreen.value = screen
-  scheduleEditValue.value = screen.enableSchedule ? { ...screen.enableSchedule, weekdays: [...screen.enableSchedule.weekdays] } : null
+  scheduleEditValue.value = screen.enableSchedule
+    ? screen.enableSchedule.map(r => ({ ...r, weekdays: [...r.weekdays] }))
+    : null
   showScheduleDialog.value = true
 }
 

@@ -37,7 +37,11 @@ const screenSaverOptions = computed(() => {
 })
 
 // Local state for editing
-const localOffSchedule = ref<ScheduleConfig | null>(device.value?.offSchedule ? { ...device.value.offSchedule, weekdays: [...device.value.offSchedule.weekdays] } : null)
+const localOffSchedule = ref<ScheduleConfig>(
+  device.value?.offSchedule
+    ? device.value.offSchedule.map(r => ({ ...r, weekdays: [...r.weekdays] }))
+    : null,
+)
 const localTimezone = ref(device.value?.timezone ?? 'UTC')
 const localScreenSaverScreenId = ref<string | null>(device.value?.screenSaverScreenId ?? null)
 
@@ -45,7 +49,9 @@ const localScreenSaverScreenId = ref<string | null>(device.value?.screenSaverScr
 watch(() => device.value, (dev) => {
   if (!dev)
     return
-  localOffSchedule.value = dev.offSchedule ? { ...dev.offSchedule, weekdays: [...dev.offSchedule.weekdays] } : null
+  localOffSchedule.value = dev.offSchedule
+    ? dev.offSchedule.map(r => ({ ...r, weekdays: [...r.weekdays] }))
+    : null
   localTimezone.value = dev.timezone ?? 'UTC'
   localScreenSaverScreenId.value = dev.screenSaverScreenId ?? null
 }, { immediate: true })
@@ -74,7 +80,9 @@ function cancel() {
   const dev = device.value
   if (!dev)
     return
-  localOffSchedule.value = dev.offSchedule ? { ...dev.offSchedule, weekdays: [...dev.offSchedule.weekdays] } : null
+  localOffSchedule.value = dev.offSchedule
+    ? dev.offSchedule.map(r => ({ ...r, weekdays: [...r.weekdays] }))
+    : null
   localTimezone.value = dev.timezone ?? 'UTC'
   localScreenSaverScreenId.value = dev.screenSaverScreenId ?? null
 }
@@ -89,6 +97,7 @@ function cancel() {
     <VCardText>
       <ScheduleConfigCard
         v-model="localOffSchedule"
+        :timezone="localTimezone"
       />
 
       <VRow density="comfortable" class="mt-2">
