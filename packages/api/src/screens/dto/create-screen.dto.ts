@@ -1,4 +1,17 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator'
+import { Type } from 'class-transformer'
+import { ScheduleConfig } from '../../schedule-config.interface'
+
+class ScheduleConfigDto implements ScheduleConfig {
+  @IsString()
+  startTime: string
+
+  @IsString()
+  endTime: string
+
+  @IsNumber({ each: true })
+  weekdays: number[]
+}
 
 export class CreateScreenDto {
   @IsString()
@@ -18,4 +31,9 @@ export class CreateScreenDto {
   @IsOptional()
   @IsString()
   html: string
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ScheduleConfigDto)
+  enableSchedule?: ScheduleConfigDto | null
 }

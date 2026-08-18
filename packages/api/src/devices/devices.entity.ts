@@ -2,6 +2,7 @@ import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm'
 import { ActionButton } from '../action-buttons/action-button.entity'
 import { LogEntry } from '../logs/logs.entity'
 import { Screen } from '../screens/screens.entity'
+import { ScheduleConfig } from '../schedule-config.interface'
 
 @Entity()
 export class Device {
@@ -64,6 +65,15 @@ export class Device {
 
   @Column('simple-json', { nullable: true })
   buttons?: string[]
+
+  @Column('simple-json', { nullable: true })
+  offSchedule?: ScheduleConfig | null
+
+  @Column('text', { default: 'UTC' })
+  timezone: string
+
+  @Column('uuid', { nullable: true })
+  screenSaverScreenId?: string | null
 
   @OneToMany(() => ActionButton, actionButton => actionButton.device)
   actionButtons: ActionButton[]

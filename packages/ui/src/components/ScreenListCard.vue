@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { Screen } from '@/types'
-import { mdiChevronDown, mdiChevronUp, mdiDelete, mdiDrag, mdiEye, mdiOpenInNew, mdiRefresh } from '@mdi/js'
+import type { ScheduleConfig, Screen } from '@/types'
+import { mdiChevronDown, mdiChevronUp, mdiClockOutline, mdiDelete, mdiDrag, mdiEye, mdiOpenInNew, mdiRefresh } from '@mdi/js'
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import { VAlert, VBtn, VCard, VCardActions, VCardText, VCardTitle, VChip, VDialog, VDivider, VIcon, VOverlay, VSpacer, VTable, VTooltip } from 'vuetify/components'
+import ScheduleConfigCard from '@/components/ScheduleConfigCard.vue'
 import { useDeviceStore } from '@/stores/device.ts'
 import { useScreensStore } from '@/stores/screens'
 
@@ -121,6 +122,25 @@ function previewScreen(screen: Screen) {
   }
 
   showScreenPreview.value = true
+}
+
+// Schedule editing
+const showScheduleDialog = ref(false)
+const scheduleEditScreen = ref<Screen | null>(null)
+const scheduleEditValue = ref<ScheduleConfig | null>(null)
+
+function openScheduleDialog(screen: Screen) {
+  scheduleEditScreen.value = screen
+  scheduleEditValue.value = screen.enableSchedule ? { ...screen.enableSchedule, weekdays: [...screen.enableSchedule.weekdays] } : null
+  showScheduleDialog.value = true
+}
+
+async function saveSchedule() {
+  if (!scheduleEditScreen.value)
+    return
+  await screensStore.updateScreen(scheduleEditScreen.value.id, { enableSchedule: scheduleEditValue.value })
+  showScheduleDialog.value = false
+  scheduleEditScreen.value = null
 }
 </script>
 
@@ -260,6 +280,20 @@ function previewScreen(screen: Screen) {
                       :aria-label="screen.type === 'mashup' ? 'Preview mashup' : screen.plugin ? 'Preview plugin output' : 'Preview screen'"
                       @click="previewScreen(screen)"
                     />
+                    <VTooltip text="Enable Schedule">
+                      <template #activator="{ props: tooltipProps }">
+                        <VBtn
+                          size="small"
+                          class="mr-2"
+                          :icon="mdiClockOutline"
+                          variant="tonal"
+                          :color="screen.enableSchedule ? 'secondary' : 'default'"
+                          v-bind="tooltipProps"
+                          aria-label="Edit enable schedule"
+                          @click="openScheduleDialog(screen)"
+                        />
+                      </template>
+                    </VTooltip>
                     <VBtn
                       v-if="!screen.plugin"
                       size="small"
@@ -359,6 +393,31 @@ function previewScreen(screen: Screen) {
           <VSpacer />
           <VBtn variant="text" @click="showScreenPreview = false">
             Close
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <VDialog v-model="showScheduleDialog" max-width="600px">
+      <VCard v-if="scheduleEditScreen">
+        <VCardTitle>
+          Enable Schedule — {{ scheduleEditScreen.plugin ? scheduleEditScreen.plugin.name : scheduleEditScreen.filename || 'Screen' }}
+        </VCardTitle>
+        <VDivider />
+        <VCardText>
+          <ScheduleConfigCard
+            v-model="scheduleEditValue"
+            :timezone="device?.timezone"
+          />
+        </VCardText>
+        <VDivider />
+        <VCardActions>
+          <VSpacer />
+          <VBtn variant="text" @click="showScheduleDialog = false">
+            Cancel
+          </VBtn>
+          <VBtn color="primary" @click="saveSchedule">
+            Save
           </VBtn>
         </VCardActions>
       </VCard>

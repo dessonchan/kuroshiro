@@ -222,7 +222,10 @@ async function saveDevice() {
     mirrorMac: device.value.mirrorMac,
     mirrorApikey: device.value.mirrorApikey,
     specialFunction: device.value.specialFunction,
-  })
+    offSchedule: device.value.offSchedule,
+    timezone: device.value.timezone,
+    screenSaverScreenId: device.value.screenSaverScreenId,
+    })
 }
 const nameEditing = ref(false)
 </script>

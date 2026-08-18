@@ -2,6 +2,8 @@ import type { CurrentScreen, Screen } from '@/types'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+export type UpdateScreen = Partial<Pick<Screen, 'enableSchedule'>>
+
 export const useScreensStore = defineStore('screens', () => {
   const screens = ref<Screen[]>([])
   const currentScreen = ref<CurrentScreen | null>(null)
@@ -88,5 +90,21 @@ export const useScreensStore = defineStore('screens', () => {
     screens.value = await res.json()
   }
 
-  return { screens, currentScreen, fetchScreensForDevice, addScreen, addScreenFile, addScreenHtml, deleteScreen, updateExternalScreen, reorderScreens, fetchCurrentScreenForDevice }
+  async function updateScreen(screenId: string, update: UpdateScreen) {
+    const res = await fetch(`/api/screens/${screenId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    })
+    if (res.ok) {
+      // Refresh screens for the device that owns this screen
+      const screen = screens.value.find(s => s.id === screenId)
+      const deviceId = typeof screen?.device === 'string' ? screen.device : screen?.device?.id
+      if (deviceId) {
+        await fetchScreensForDevice(deviceId)
+      }
+    }
+  }
+
+  return { screens, currentScreen, fetchScreensForDevice, addScreen, addScreenFile, addScreenHtml, deleteScreen, updateExternalScreen, reorderScreens, updateScreen, fetchCurrentScreenForDevice }
 })

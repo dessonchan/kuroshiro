@@ -19,6 +19,9 @@ export interface Device {
   updateFirmware: boolean
   lastSeen: string
   buttons?: string[]
+  offSchedule: ScheduleConfig | null
+  timezone: string
+  screenSaverScreenId: string | null
 }
 
 export interface ActionButton {
@@ -48,6 +51,7 @@ export interface Screen {
   cachedPluginOutput?: string | null
   mashupConfiguration?: { id: string, layout: string }
   order?: number
+  enableSchedule: ScheduleConfig | null
 }
 
 export interface CurrentScreen {
@@ -111,4 +115,10 @@ export interface CleanupResult {
 export interface MaintenanceStats {
   fileCount: number
   totalSize: number
+}
+
+export interface ScheduleConfig {
+  startTime: string  // "HH:mm" format, e.g. "23:00"
+  endTime: string    // "HH:mm" format, e.g. "07:00"
+  weekdays: number[] // 0=Sunday, 1=Monday, ..., 6=Saturday. Empty array = inactive
 }

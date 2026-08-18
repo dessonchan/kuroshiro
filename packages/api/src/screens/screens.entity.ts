@@ -2,6 +2,7 @@ import type { Plugin } from '../plugins/entities/plugin.entity'
 import { Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn } from 'typeorm'
 import { Device } from '../devices/devices.entity'
 import { MashupConfiguration } from '../mashup/entities/mashup-configuration.entity'
+import { ScheduleConfig } from '../schedule-config.interface'
 
 @Entity()
 export class Screen {
@@ -34,6 +35,9 @@ export class Screen {
 
   @Column({ type: 'text', nullable: true })
   cachedPluginOutput?: string | null
+
+  @Column({ type: 'simple-json', nullable: true })
+  enableSchedule?: ScheduleConfig | null
 
   @ManyToOne(() => Device, { onDelete: 'CASCADE' })
   device: Device
