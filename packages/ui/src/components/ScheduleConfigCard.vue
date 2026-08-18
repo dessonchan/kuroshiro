@@ -42,6 +42,20 @@ watch(() => props.modelValue, (val) => {
   }
 }, { immediate: true })
 
+// When hideActions is true, emit update:modelValue reactively on every change
+// so the parent (e.g. dialog) always has the latest value
+watch([enabled, localRules], () => {
+  if (props.hideActions) {
+    if (enabled.value && localRules.value.some(r => r.weekdays.length > 0)) {
+      const validRules = localRules.value.filter(r => r.weekdays.length > 0)
+      emit('update:modelValue', validRules)
+    }
+    else {
+      emit('update:modelValue', null)
+    }
+  }
+}, { deep: true })
+
 function addRule() {
   localRules.value.push({ startTime: '09:00', endTime: '17:00', weekdays: [1, 2, 3, 4, 5] })
 }
