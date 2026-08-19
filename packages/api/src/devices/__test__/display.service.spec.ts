@@ -198,7 +198,7 @@ describe('deviceDisplayService', () => {
     expect(result.refresh_rate).toBe(30)
     expect(result.firmware_url).toBe('http://example.com/firmware')
     expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
     expect(fs.unlink).toHaveBeenCalled()
   })
 
@@ -237,7 +237,7 @@ describe('deviceDisplayService', () => {
     expect(result.image_url).toContain('mirror.png')
     expect(result.refresh_rate).toBe(device.refreshRate)
     expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
     expect(fs.unlink).toHaveBeenCalled()
   })
 
@@ -303,7 +303,7 @@ describe('deviceDisplayService', () => {
         headers: { 'access-token': 'mirror-token', 'ID': 'different-mac' },
       })
       expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
       expect(result).toBeInstanceOf(DisplayScreen)
       expect(result.filename).toContain('mirror')
       expect(result.image_url).toBe('http://api/screens/devices/1/mirror.png')
@@ -365,7 +365,7 @@ describe('deviceDisplayService', () => {
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('screen1.png'), 800, 480, expect.any(Object))
+      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('screen1.png'), 800, 480, undefined, expect.any(Object))
       expect(result).toBeInstanceOf(DisplayScreen)
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
     })
