@@ -2,10 +2,21 @@ import { createVuetify } from 'vuetify'
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
 import 'vuetify/styles'
 
+// mdi-svg iconset's built-in aliases are missing some internal Vuetify icons
+// (e.g. circle-small used by VSwitch/VCheckbox on-state indicator).
+// Without these, Vuetify tries to parse the icon NAME as an SVG path and throws
+// "Problem parsing d=\"mdi-circle-small\"". Merge the missing aliases here.
+const customAliases = {
+  ...aliases,
+  // MDI circle-small path (VSwitch/VCheckbox on-state dot)
+  circleSmall: 'svg:M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z',
+  'circle-small': 'svg:M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z',
+}
+
 export default createVuetify({
   icons: {
     defaultSet: 'mdi',
-    aliases,
+    aliases: customAliases,
     sets: {
       mdi,
     },

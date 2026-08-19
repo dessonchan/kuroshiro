@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { mdiDelete } from '@mdi/js'
+import {
+  mdiAlert,
+  mdiAlertCircle,
+  mdiChevronDown,
+  mdiChevronUp,
+  mdiCircleSmall,
+  mdiClockOutline,
+  mdiDelete,
+  mdiFileCode,
+  mdiInformation,
+} from '@mdi/js'
 import { computed } from 'vue'
 import { VAlert, VAvatar, VBtn, VCard, VCardText, VCardTitle, VChip, VCol, VDivider, VExpansionPanel, VExpansionPanels, VExpansionPanelText, VExpansionPanelTitle, VIcon, VList, VListItem, VListItemSubtitle, VListItemTitle, VRow, VSpacer } from 'vuetify/components'
 import { useDeviceStore } from '@/stores/device.ts'
@@ -60,10 +70,10 @@ function getSeverityColor(severity: string) {
 
 function getSeverityIcon(severity: string) {
   switch (severity) {
-    case 'error': return 'mdi-alert-circle'
-    case 'warning': return 'mdi-alert'
-    case 'info': return 'mdi-information'
-    default: return 'mdi-circle-small'
+    case 'error': return mdiAlertCircle
+    case 'warning': return mdiAlert
+    case 'info': return mdiInformation
+    default: return mdiCircleSmall
   }
 }
 </script>
@@ -111,13 +121,13 @@ function getSeverityIcon(severity: string) {
               <VListItemSubtitle>
                 <div class="d-flex flex-column gap-1">
                   <div class="d-flex align-center gap-2 flex-wrap">
-                    <VChip size="x-small" prepend-icon="mdi-clock-outline" variant="text">
+                    <VChip size="x-small" prepend-icon="mdiClockOutline" variant="text">
                       {{ formatDate(item.logEntry.date) }}
                     </VChip>
                     <VChip
                       v-if="item.parsed?.log_sourcefile"
                       size="x-small"
-                      prepend-icon="mdi-file-code"
+                      prepend-icon="mdiFileCode"
                       variant="text"
                     >
                       {{ item.parsed.log_sourcefile }}:{{ item.parsed.log_codeline }}
@@ -134,7 +144,7 @@ function getSeverityIcon(severity: string) {
                           <VBtn
                             size="x-small"
                             variant="text"
-                            :prepend-icon="expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                            :prepend-icon="expanded ? mdiChevronUp : mdiChevronDown"
                             :aria-label="expanded ? 'Hide log details' : 'Show log details'"
                           >
                             {{ expanded ? 'Less' : 'Show Details' }}
