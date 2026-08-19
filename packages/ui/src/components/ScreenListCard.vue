@@ -289,7 +289,7 @@ async function saveSchedule() {
                           class="mr-2"
                           :icon="mdiClockOutline"
                           variant="tonal"
-                          :color="screen.enableSchedule ? 'secondary' : 'default'"
+                          :color="screen.enableSchedule ? 'blue' : 'default'"
                           v-bind="tooltipProps"
                           aria-label="Edit enable schedule"
                           @click="openScheduleDialog(screen)"
