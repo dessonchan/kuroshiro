@@ -528,7 +528,7 @@ export class DeviceDisplayService {
     const name = screen.filename ?? screen.type
     return name
       .replace(/[-_]/g, ' ')
-      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/^\w|[A-Z]|(?<=[-\s])\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
       .replace(/\s+/g, '')
   }
 
