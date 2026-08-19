@@ -4,11 +4,17 @@ import { Display } from '../display'
 import { DeviceDisplayService } from '../display.service'
 import { DisplayScreen } from '../displayScreen'
 
-const { fileExists } = vi.hoisted(() => ({
-  fileExists: vi.fn(),
+const { fileExists } = vi.hoisted(() => ({ fileExists: vi.fn() }))
+const { isInSchedule, secondsUntilScheduleEnd } = vi.hoisted(() => ({
+  isInSchedule: vi.fn(),
+  secondsUntilScheduleEnd: vi.fn(),
 }))
 
 vi.mock('../../utils/fileExists', () => ({ fileExists }))
+vi.mock('../../utils/schedule', () => ({ isInSchedule, secondsUntilScheduleEnd }))
+vi.mock('../../utils/templateContext', () => ({
+  buildTrmnlContext: vi.fn(() => ({ trmnl: {} })),
+}), { virtual: true })
 vi.mock('node:fs', () => ({ promises: { unlink: vi.fn() } }))
 vi.mock('../../utils/imageUtils', () => ({
   downloadImage: vi.fn().mockResolvedValue(undefined),
@@ -30,6 +36,7 @@ function createMockRepo() {
   return {
     findOneBy: vi.fn(),
     findOne: vi.fn(),
+    find: vi.fn(),
     save: vi.fn(),
     update: vi.fn(),
   }
@@ -51,6 +58,9 @@ describe('deviceDisplayService auto-activate first screen', () => {
       configService as any,
     )
     vi.resetAllMocks()
+    isInSchedule.mockReturnValue(false)
+    secondsUntilScheduleEnd.mockReturnValue(3600)
+    screenRepo.find.mockResolvedValue([])
   })
 
   const baseDevice = {
@@ -73,12 +83,12 @@ describe('deviceDisplayService auto-activate first screen', () => {
     const firstScreen = { id: 'screen1', order: 1, isActive: false, device, filename: 'first.png', generatedAt: new Date() }
 
     deviceRepo.findOneBy.mockResolvedValue(device)
-    // Call 1: active-screen lookup -> null. Call 2: first-screen lookup -> firstScreen.
-    // Call 3 (recursive): active-screen lookup -> firstScreen (now active).
+    // First call: active-screen lookup -> null (triggers activation).
+    // Second call (recursion): the activated screen is now found.
     screenRepo.findOneBy
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(firstScreen)
       .mockResolvedValue(firstScreen)
+    screenRepo.find.mockResolvedValue([firstScreen])
     screenRepo.save.mockResolvedValue(firstScreen)
     configService.get.mockReturnValue('http://api')
     deviceRepo.save.mockResolvedValue(undefined)
@@ -91,11 +101,12 @@ describe('deviceDisplayService auto-activate first screen', () => {
     expect(result).toBeInstanceOf(Display)
   })
 
-  it('returns the default no-screen image when there is no active screen and no first screen', async () => {
+  it('returns the default no-screen image when there is no active screen and no screens in the playlist', async () => {
     const device = { ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false }
 
     deviceRepo.findOneBy.mockResolvedValue(device)
     screenRepo.findOneBy.mockResolvedValue(null)
+    screenRepo.find.mockResolvedValue([])
     configService.get.mockReturnValue('http://api')
     deviceRepo.save.mockResolvedValue(undefined)
 
@@ -109,10 +120,11 @@ describe('deviceDisplayService auto-activate first screen', () => {
     const firstScreen = { id: 'screen1', order: 1, isActive: false, device, filename: 'first.png', generatedAt: new Date() }
 
     deviceRepo.findOneBy.mockResolvedValue(device)
+    // First call: active-screen lookup returns null. Second call (recursive): firstScreen is active.
     screenRepo.findOneBy
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(firstScreen)
       .mockResolvedValue(firstScreen)
+    screenRepo.find.mockResolvedValue([firstScreen])
     screenRepo.save.mockResolvedValue(firstScreen)
     configService.get.mockReturnValue('http://api')
     fileExists.mockResolvedValue(true)

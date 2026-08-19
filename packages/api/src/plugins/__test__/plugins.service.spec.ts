@@ -293,6 +293,7 @@ describe('pluginsService', () => {
 
   it('assignToDevice creates device plugin and screen', async () => {
     const devicePlugin = { id: 'dp-1', isActive: true, order: 0 }
+    pluginRepo.findOneBy.mockResolvedValue({ ...basePlugin, id: 'plugin-1' })
     devicePluginRepo.create.mockReturnValue(devicePlugin)
     devicePluginRepo.save.mockResolvedValue(devicePlugin)
     screenRepo.maximum.mockResolvedValue(5)

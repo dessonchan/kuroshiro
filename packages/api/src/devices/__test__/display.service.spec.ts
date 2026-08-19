@@ -128,9 +128,7 @@ describe('deviceDisplayService', () => {
     const device = { ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false }
     const filename = 'file.png'
     const generatedAt = new Date()
-    // NOTE: this branch's screenFilename uses the old regex (no lookbehind),
-    // so '.png' is uppercased to '.Png'. This is a known branch quirk.
-    const dynamicFilename = `file.Png_${generatedAt.toISOString()}`
+    const dynamicFilename = `file.png_${generatedAt.toISOString()}`
     const activeScreen = { id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename, generatedAt }
     const nextScreen = { ...activeScreen, id: 'screen2', order: 2, isActive: false }
     deviceRepo.findOneBy.mockResolvedValue(device)
@@ -354,8 +352,7 @@ describe('deviceDisplayService', () => {
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(result).toBeInstanceOf(DisplayScreen)
-      // NOTE: this branch's screenFilename uppercases '.png' to '.Png' (old regex)
-      expect(result.filename).toBe(`test.Png_${activeScreen.generatedAt.toISOString()}`)
+      expect(result.filename).toBe(`test.png_${activeScreen.generatedAt.toISOString()}`)
       expect(result.image_url).toBe(`http://api/screens/devices/1/screen1.png`)
       expect(result.rendered_at).toBe(activeScreen.generatedAt)
     })
@@ -425,8 +422,7 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(result.rendered_at).not.toBe(staleDate)
       expect(result.rendered_at).toBe(activeScreen.generatedAt)
-      // NOTE: this branch's screenFilename uppercases '.png' to '.Png' (old regex)
-      expect(result.filename).toBe(`test.Png_${activeScreen.generatedAt.toISOString()}`)
+      expect(result.filename).toBe(`test.png_${activeScreen.generatedAt.toISOString()}`)
     })
   })
 
