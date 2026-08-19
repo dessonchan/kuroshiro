@@ -63,7 +63,7 @@ describe('imageUtils', () => {
         callback(null, '', '')
       })
 
-      await convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger)
+      await convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger)
 
       expect(mockFs.existsSync)
         .toHaveBeenCalled()
@@ -79,7 +79,7 @@ describe('imageUtils', () => {
         callback(null, '', '')
       })
 
-      await convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger)
+      await convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger)
 
       expect(mockFs.existsSync)
         .toHaveBeenCalled()
@@ -93,7 +93,7 @@ describe('imageUtils', () => {
         callback(null, '', '')
       })
 
-      await convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger)
+      await convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger)
 
       expect(mockExec).toHaveBeenCalledTimes(1)
       const cmd = mockExec.mock.calls[0][0]
@@ -115,7 +115,7 @@ describe('imageUtils', () => {
         callback(null, '', '')
       })
 
-      await convertToPng('/input.jpg', '/output.png', 640, 384, mockLogger)
+      await convertToPng('/input.jpg', '/output.png', 640, 384, 0, mockLogger)
 
       const cmd = mockExec.mock.calls[0][0]
       expect(cmd).toContain('-resize 640x384')
@@ -130,7 +130,7 @@ describe('imageUtils', () => {
         }
       })
 
-      await expect(convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger))
+      await expect(convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger))
         .rejects
         .toThrow('ImageMagick failed')
 
@@ -143,7 +143,7 @@ describe('imageUtils', () => {
         callback(new Error('Conversion failed'), '', 'Conversion error')
       })
 
-      await expect(convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger))
+      await expect(convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger))
         .rejects
         .toThrow('Conversion failed')
 
@@ -156,7 +156,7 @@ describe('imageUtils', () => {
         callback(null, 'success', '')
       })
 
-      await convertToPng('/input.jpg', '/output.png', 800, 480, mockLogger)
+      await convertToPng('/input.jpg', '/output.png', 800, 480, 0, mockLogger)
 
       expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('Running ImageMagick:'))
       expect(mockLogger.log).toHaveBeenCalledWith('ImageMagick output: success')
