@@ -43,6 +43,7 @@ function createMockRepo() {
   return {
     findOneBy: vi.fn(),
     findOne: vi.fn(),
+    find: vi.fn(),
     save: vi.fn(),
     update: vi.fn(),
   }
@@ -102,6 +103,7 @@ describe('deviceDisplayService', () => {
   it('returns default no screen image if no active screen and not mirrored', async () => {
     deviceRepo.findOneBy.mockResolvedValue({ ...baseDevice, apikey: 'token' })
     screenRepo.findOneBy.mockResolvedValue(null)
+    screenRepo.find.mockResolvedValue([])
     configService.get.mockReturnValue('http://api')
     deviceRepo.save.mockResolvedValue(undefined)
     const result = await service.getCurrentImage(headers as any)
@@ -121,6 +123,7 @@ describe('deviceDisplayService', () => {
     screenRepo.findOneBy
       .mockResolvedValueOnce(activeScreen) // activeScreen
       .mockResolvedValueOnce(nextScreen) // nextScreen
+    screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
     screenRepo.update.mockResolvedValue(undefined)
     screenRepo.save.mockResolvedValue(nextScreen)
     configService.get.mockReturnValue('http://api')
@@ -150,6 +153,7 @@ describe('deviceDisplayService', () => {
     screenRepo.findOneBy
       .mockResolvedValueOnce(activeScreen)
       .mockResolvedValueOnce(nextScreen)
+    screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
     configService.get.mockReturnValue('http://api')
 
     const result = await service.getCurrentImage(headers as any)
@@ -198,7 +202,7 @@ describe('deviceDisplayService', () => {
     expect(result.refresh_rate).toBe(30)
     expect(result.firmware_url).toBe('http://example.com/firmware')
     expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
     expect(fs.unlink).toHaveBeenCalled()
   })
 
@@ -237,7 +241,7 @@ describe('deviceDisplayService', () => {
     expect(result.image_url).toContain('mirror.png')
     expect(result.refresh_rate).toBe(device.refreshRate)
     expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+    expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
     expect(fs.unlink).toHaveBeenCalled()
   })
 
@@ -303,7 +307,7 @@ describe('deviceDisplayService', () => {
         headers: { 'access-token': 'mirror-token', 'ID': 'different-mac' },
       })
       expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, expect.any(Object))
+      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('mirror.png'), 800, 480, undefined, expect.any(Object))
       expect(result).toBeInstanceOf(DisplayScreen)
       expect(result.filename).toContain('mirror')
       expect(result.image_url).toBe('http://api/screens/devices/1/mirror.png')
@@ -365,7 +369,7 @@ describe('deviceDisplayService', () => {
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(downloadImage).toHaveBeenCalledWith('http://example.com/image.jpg', expect.any(String), expect.any(Object))
-      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('screen1.png'), 800, 480, expect.any(Object))
+      expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('screen1.png'), 800, 480, undefined, expect.any(Object))
       expect(result).toBeInstanceOf(DisplayScreen)
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
     })
@@ -456,6 +460,7 @@ describe('deviceDisplayService', () => {
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
       screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreenBase)
+      screenRepo.find.mockResolvedValue([activeScreen, nextScreenBase])
       screenRepo.findOne.mockResolvedValue({ ...nextScreenBase, mashupConfiguration: mashupConfig })
       screenRepo.update.mockResolvedValue(undefined)
       screenRepo.save.mockResolvedValue({ ...nextScreenBase, isActive: true })
@@ -491,6 +496,7 @@ describe('deviceDisplayService', () => {
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
       screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreen)
+      screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
       screenRepo.findOne.mockResolvedValue(nextScreen)
       screenRepo.update.mockResolvedValue(undefined)
       screenRepo.save.mockResolvedValue(nextScreen)
@@ -520,6 +526,7 @@ describe('deviceDisplayService', () => {
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
       screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreen)
+      screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
       screenRepo.findOne.mockResolvedValue(nextScreen)
       screenRepo.update.mockResolvedValue(undefined)
       screenRepo.save.mockResolvedValue(nextScreen)
