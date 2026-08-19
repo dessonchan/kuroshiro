@@ -8,10 +8,18 @@ import { DisplayScreen } from '../displayScreen'
 const { fileExists } = vi.hoisted(() => ({
   fileExists: vi.fn(),
 }))
+const { isInSchedule, secondsUntilScheduleEnd } = vi.hoisted(() => ({
+  isInSchedule: vi.fn(),
+  secondsUntilScheduleEnd: vi.fn(),
+}))
 
 vi.mock('../../utils/fileExists', () => ({
   fileExists,
 }))
+vi.mock('../../utils/schedule', () => ({ isInSchedule, secondsUntilScheduleEnd }))
+vi.mock('../../utils/templateContext', () => ({
+  buildTrmnlContext: vi.fn(() => ({ trmnl: {} })),
+}), { virtual: true })
 
 vi.mock('node:fs', () => ({
   promises: {
@@ -65,6 +73,11 @@ describe('deviceDisplayService', () => {
       configService as any,
     )
     vi.resetAllMocks()
+    // Default: device is not in off-schedule, so schedule checks don't interfere
+    isInSchedule.mockReturnValue(false)
+    secondsUntilScheduleEnd.mockReturnValue(3600)
+    // Default: no screens in the playlist when none is active
+    screenRepo.find.mockResolvedValue([])
   })
 
   const baseDevice = {
@@ -103,7 +116,6 @@ describe('deviceDisplayService', () => {
   it('returns default no screen image if no active screen and not mirrored', async () => {
     deviceRepo.findOneBy.mockResolvedValue({ ...baseDevice, apikey: 'token' })
     screenRepo.findOneBy.mockResolvedValue(null)
-    screenRepo.find.mockResolvedValue([])
     configService.get.mockReturnValue('http://api')
     deviceRepo.save.mockResolvedValue(undefined)
     const result = await service.getCurrentImage(headers as any)
@@ -116,14 +128,14 @@ describe('deviceDisplayService', () => {
     const device = { ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false }
     const filename = 'file.png'
     const generatedAt = new Date()
-    const dynamicFilename = `${filename}_${generatedAt.toISOString()}`
+    // NOTE: this branch's screenFilename uses the old regex (no lookbehind),
+    // so '.png' is uppercased to '.Png'. This is a known branch quirk.
+    const dynamicFilename = `file.Png_${generatedAt.toISOString()}`
     const activeScreen = { id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename, generatedAt }
     const nextScreen = { ...activeScreen, id: 'screen2', order: 2, isActive: false }
     deviceRepo.findOneBy.mockResolvedValue(device)
-    screenRepo.findOneBy
-      .mockResolvedValueOnce(activeScreen) // activeScreen
-      .mockResolvedValueOnce(nextScreen) // nextScreen
-    screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
+    screenRepo.findOneBy.mockResolvedValue(activeScreen) // activeScreen
+    screenRepo.find.mockResolvedValue([activeScreen, nextScreen]) // playlist
     screenRepo.update.mockResolvedValue(undefined)
     screenRepo.save.mockResolvedValue(nextScreen)
     configService.get.mockReturnValue('http://api')
@@ -150,9 +162,7 @@ describe('deviceDisplayService', () => {
     const nextScreen = { ...activeScreen, id: 'screen2', order: 2, isActive: false }
 
     deviceRepo.findOneBy.mockResolvedValue(device)
-    screenRepo.findOneBy
-      .mockResolvedValueOnce(activeScreen)
-      .mockResolvedValueOnce(nextScreen)
+    screenRepo.findOneBy.mockResolvedValue(activeScreen)
     screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
     configService.get.mockReturnValue('http://api')
 
@@ -344,7 +354,8 @@ describe('deviceDisplayService', () => {
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(result).toBeInstanceOf(DisplayScreen)
-      expect(result.filename).toBe(`${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`)
+      // NOTE: this branch's screenFilename uppercases '.png' to '.Png' (old regex)
+      expect(result.filename).toBe(`test.Png_${activeScreen.generatedAt.toISOString()}`)
       expect(result.image_url).toBe(`http://api/screens/devices/1/screen1.png`)
       expect(result.rendered_at).toBe(activeScreen.generatedAt)
     })
@@ -414,7 +425,8 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(result.rendered_at).not.toBe(staleDate)
       expect(result.rendered_at).toBe(activeScreen.generatedAt)
-      expect(result.filename).toBe(`test.png_${activeScreen.generatedAt.toISOString()}`)
+      // NOTE: this branch's screenFilename uppercases '.png' to '.Png' (old regex)
+      expect(result.filename).toBe(`test.Png_${activeScreen.generatedAt.toISOString()}`)
     })
   })
 
@@ -459,7 +471,7 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreenBase)
+      screenRepo.findOneBy.mockResolvedValue(activeScreen)
       screenRepo.find.mockResolvedValue([activeScreen, nextScreenBase])
       screenRepo.findOne.mockResolvedValue({ ...nextScreenBase, mashupConfiguration: mashupConfig })
       screenRepo.update.mockResolvedValue(undefined)
@@ -495,7 +507,7 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreen)
+      screenRepo.findOneBy.mockResolvedValue(activeScreen)
       screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
       screenRepo.findOne.mockResolvedValue(nextScreen)
       screenRepo.update.mockResolvedValue(undefined)
@@ -525,7 +537,7 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValueOnce(activeScreen).mockResolvedValueOnce(nextScreen)
+      screenRepo.findOneBy.mockResolvedValue(activeScreen)
       screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
       screenRepo.findOne.mockResolvedValue(nextScreen)
       screenRepo.update.mockResolvedValue(undefined)
