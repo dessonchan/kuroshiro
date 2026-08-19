@@ -16,8 +16,8 @@ import { Screen } from '../screens/screens.entity'
 import { fileExists } from '../utils/fileExists'
 import { convertToPng, downloadImage } from '../utils/imageUtils'
 import { resolveAppPath } from '../utils/pathHelper'
-import { buildTrmnlContext } from '../utils/templateContext'
 import { isInSchedule, secondsUntilScheduleEnd } from '../utils/schedule'
+import { buildTrmnlContext } from '../utils/templateContext'
 import { Device } from './devices.entity'
 import { Display } from './display'
 import { DisplayScreen } from './displayScreen'
@@ -644,7 +644,7 @@ export class DeviceDisplayService {
     const name = screen.filename ?? screen.type
     return name
       .replace(/[-_]/g, ' ')
-      .replace(/^\w|[A-Z]|\b\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
+      .replace(/^\w|[A-Z]|(?<=[-_\s])\w/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase())
       .replace(/\s+/g, '')
   }
 

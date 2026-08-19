@@ -20,10 +20,17 @@ function nowInTimezone(timezone: string): { weekday: number, minutes: number } {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+    hourCycle: 'h23', // force 00:00–23:59, never "24:00" at midnight
   })
   const parts = formatter.formatToParts(now)
   const weekdayMap: Record<string, number> = {
-    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
   }
   const weekdayStr = parts.find(p => p.type === 'weekday')?.value ?? 'Sun'
   const hourStr = parts.find(p => p.type === 'hour')?.value ?? '0'
