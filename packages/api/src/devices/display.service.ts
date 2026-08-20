@@ -294,17 +294,90 @@ export class DeviceDisplayService {
       device.buttons = buttons
       await this.deviceRepository.save(device)
     }
+
+    // === Schedule checks ===
+    // Highest priority: device off-schedule period → show screensaver or noScreen.
+    if (isInSchedule(device.offSchedule, device.timezone)) {
+      this.logger.log(`Device ${device.id} is in off-schedule period`)
+
+      // Try to render screen saver if configured
+      if (device.screenSaverScreenId) {
+        const screenSaver = await this.screenRepository.findOneBy({ id: device.screenSaverScreenId, device: { id: device.id } })
+        if (screenSaver) {
+          this.logger.log(`Device ${device.id} showing screen saver ${screenSaver.id}`)
+          const imgUrl = await this.generateScreenImage(screenSaver, device)
+          return new DisplayScreen({
+            filename: `${this.screenFilename(screenSaver)}_${screenSaver.generatedAt.toISOString()}`,
+            image_url: imgUrl,
+            refresh_rate: device.refreshRate,
+            rendered_at: screenSaver.generatedAt,
+          })
+        }
+      }
+
+      // No screen saver — return noScreen.png
+      this.logger.log(`Device ${device.id} in off-schedule with no screen saver, returning noScreen.png`)
+      return new DisplayScreen({
+        filename: 'noScreen.png',
+        image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
+        refresh_rate: device.refreshRate,
+        rendered_at: new Date(),
+      })
+    }
+
     const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
     if (!activeScreen && !device.mirrorEnabled) {
-      // No active screen — activate the first screen in the playlist
-      const firstScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, order: 1 })
-      if (firstScreen) {
-        firstScreen.isActive = true
-        await this.screenRepository.save(firstScreen)
-        this.logger.log(`No active screen, activated first screen ${firstScreen.id} for device ${device.id}`)
+      // No active screen — activate the first enabled screen in the playlist
+      const screens = await this.screenRepository.find({
+        where: { device: { id: device.id } },
+        order: { order: 'ASC' },
+      })
+      const enabledScreen = screens.find(s => this.isScreenEnabled(s, device.timezone))
+      if (enabledScreen) {
+        enabledScreen.isActive = true
+        await this.screenRepository.save(enabledScreen)
+        this.logger.log(`No active screen, activated first enabled screen ${enabledScreen.id} for device ${device.id}`)
         return this.getCurrentImageWithoutProgressing(headers)
       }
       this.logger.log('No screen found returning default no screen image')
+      return new DisplayScreen({
+        filename: 'noScreen.png',
+        image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
+        refresh_rate: device.refreshRate,
+        rendered_at: new Date(),
+      })
+    }
+    // If the active screen is disabled by its own schedule, cycle to the next enabled one.
+    if (!device.mirrorEnabled && !this.isScreenEnabled(activeScreen, device.timezone)) {
+      this.logger.log(`Active screen ${activeScreen.id} is disabled by schedule, cycling to next enabled screen`)
+      const screens = await this.screenRepository.find({
+        where: { device: { id: device.id } },
+        order: { order: 'ASC' },
+      })
+      const currentIndex = screens.findIndex(s => s.id === activeScreen.id)
+      let nextScreen: Screen | null = null
+      for (let offset = 1; offset <= screens.length; offset++) {
+        const candidate = screens[(currentIndex + offset) % screens.length]
+        if (this.isScreenEnabled(candidate, device.timezone)) {
+          nextScreen = candidate
+          break
+        }
+      }
+      if (nextScreen) {
+        await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
+        nextScreen.isActive = true
+        await this.screenRepository.save(nextScreen)
+        this.logger.log(`Returning enabled screen ${nextScreen.id} for device ${device.id}`)
+        const imgUrl = await this.generateScreenImage(nextScreen, device)
+        return new DisplayScreen({
+          filename: `${this.screenFilename(nextScreen)}_${nextScreen.generatedAt.toISOString()}`,
+          image_url: imgUrl,
+          refresh_rate: device.refreshRate,
+          rendered_at: nextScreen.generatedAt,
+        })
+      }
+      // All screens disabled by schedule — return noScreen.png
+      this.logger.log(`All screens disabled for device ${device.id}, returning noScreen.png`)
       return new DisplayScreen({
         filename: 'noScreen.png',
         image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
