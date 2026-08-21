@@ -116,7 +116,7 @@ export class DeviceDisplayService {
           // Dynamic refresh_rate: min(10x base, seconds until off-schedule ends)
           const secondsToEnd = secondsUntilScheduleEnd(device.offSchedule!, device.timezone)
           const refreshRate = Math.min(device.refreshRate * 10, secondsToEnd)
-          return new Display({
+          return this.cacheAndReturn(device.id, new Display({
             filename: `${this.screenFilename(screenSaver)}_${screenSaver.generatedAt.toISOString()}`,
             firmware_url: '',
             image_url: imgUrl,
@@ -124,7 +124,7 @@ export class DeviceDisplayService {
             reset_firmware: resetDevice,
             special_function: device.specialFunction,
             update_firmware: updateFirmware,
-          })
+          }))
         }
       }
 
@@ -132,7 +132,7 @@ export class DeviceDisplayService {
       const secondsToEnd = secondsUntilScheduleEnd(device.offSchedule!, device.timezone)
       const refreshRate = Math.min(device.refreshRate * 10, secondsToEnd)
       this.logger.log(`Device ${device.id} in off-schedule with no screen saver, returning noScreen.png`)
-      return new Display({
+      return this.cacheAndReturn(device.id, new Display({
         filename: 'noScreen.png',
         firmware_url: '',
         image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
@@ -140,7 +140,7 @@ export class DeviceDisplayService {
         reset_firmware: resetDevice,
         special_function: device.specialFunction,
         update_firmware: updateFirmware,
-      })
+      }))
     }
 
     const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
@@ -158,7 +158,7 @@ export class DeviceDisplayService {
         return this.getCurrentImage(headers)
       }
       this.logger.log('No screen found returning default no screen image')
-      return new Display({
+      return this.cacheAndReturn(device.id, new Display({
         filename: 'noScreen.png',
         firmware_url: '',
         image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
@@ -166,7 +166,7 @@ export class DeviceDisplayService {
         reset_firmware: resetDevice,
         special_function: device.specialFunction,
         update_firmware: updateFirmware,
-      })
+      }))
     }
     if (!device.mirrorEnabled) {
       this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
@@ -192,7 +192,7 @@ export class DeviceDisplayService {
       if (!nextScreen) {
         // All screens disabled — return noScreen.png
         this.logger.log(`All screens disabled for device ${device.id}, returning noScreen.png`)
-        return new Display({
+        return this.cacheAndReturn(device.id, new Display({
           filename: 'noScreen.png',
           firmware_url: '',
           image_url: `${this.configService.get<string>('api_url')}/screens/noScreen.png`,
@@ -200,7 +200,7 @@ export class DeviceDisplayService {
           reset_firmware: false,
           special_function: device.specialFunction,
           update_firmware: false,
-        })
+        }))
       }
 
       await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
@@ -210,7 +210,7 @@ export class DeviceDisplayService {
 
       const imgUrl = await this.generateScreenImage(nextScreen, device)
 
-      return new Display({
+      return this.cacheAndReturn(device.id, new Display({
         filename: `${this.screenFilename(nextScreen)}_${nextScreen.generatedAt.toISOString()}`,
         firmware_url: '',
         image_url: imgUrl,
@@ -218,7 +218,7 @@ export class DeviceDisplayService {
         reset_firmware: false,
         special_function: device.specialFunction,
         update_firmware: false,
-      })
+      }))
     }
     else {
       this.logger.log(`Device ${device.id} is mirrored. Fetching from TRMNL.`)
@@ -252,7 +252,7 @@ export class DeviceDisplayService {
         this.logger.error(`Failed to process image: ${err.message}`)
       }
       this.logger.log(`Returning mirrored screen for device ${device.id}`)
-      return new Display({
+      return this.cacheAndReturn(device.id, new Display({
         filename,
         firmware_url: firmwareUrl,
         image_url: localImageUrl,
@@ -260,7 +260,7 @@ export class DeviceDisplayService {
         reset_firmware: resetFirmware,
         special_function: specialFunction,
         update_firmware: updateFirmware,
-      })
+      }))
     }
   }
 
@@ -274,6 +274,60 @@ export class DeviceDisplayService {
     if (!screen.enableSchedule)
       return true // No schedule = always enabled
     return isInSchedule(screen.enableSchedule, timezone)
+  }
+
+  /**
+   * Persist the last /api/display response to a per-device JSON file.
+   * This is what the Web UI "Current Screen" panel should reflect, so it
+   * matches exactly what the firmware last received — without recomputing
+   * the schedule/playlist logic on every current_screen request.
+   */
+  private async cacheCurrentScreen(deviceId: string, display: Display): Promise<void> {
+    const cachePath = resolveAppPath('public', 'screens', 'devices', deviceId, 'current-screen.json')
+    const screen: DisplayScreen = new DisplayScreen({
+      filename: display.filename,
+      image_url: display.image_url,
+      refresh_rate: display.refresh_rate,
+      rendered_at: new Date(),
+    })
+    try {
+      await fs.promises.mkdir(path.dirname(cachePath), { recursive: true })
+      await fs.promises.writeFile(cachePath, JSON.stringify(screen))
+    }
+    catch (err) {
+      this.logger.error(`Failed to cache current screen for device ${deviceId}: ${err.message}`)
+    }
+  }
+
+  /**
+   * Cache the given Display response for the device, then return it.
+   * Used at every return point of getCurrentImage so the cache always
+   * reflects the last response the firmware actually received.
+   */
+  private async cacheAndReturn(deviceId: string, display: Display): Promise<Display> {
+    await this.cacheCurrentScreen(deviceId, display)
+    return display
+  }
+
+  /**
+   * Read the last /api/display response from the per-device cache file.
+   * Returns null if no cache exists yet (e.g. the device has never polled).
+   */
+  private async readCurrentScreenCache(deviceId: string): Promise<DisplayScreen | null> {
+    const cachePath = resolveAppPath('public', 'screens', 'devices', deviceId, 'current-screen.json')
+    try {
+      const raw = await fs.promises.readFile(cachePath, 'utf-8')
+      const data = JSON.parse(raw)
+      return new DisplayScreen({
+        filename: data.filename,
+        image_url: data.image_url,
+        refresh_rate: data.refresh_rate,
+        rendered_at: new Date(data.rendered_at),
+      })
+    }
+    catch {
+      return null
+    }
   }
 
   async getCurrentImageWithoutProgressing(headers: Pick<DisplayRequestHeadersDto, 'id' | 'access-token' | 'x-buttons'>): Promise<DisplayScreen> {
@@ -294,6 +348,20 @@ export class DeviceDisplayService {
       device.buttons = buttons
       await this.deviceRepository.save(device)
     }
+
+    // Return the last /api/display response the firmware actually received,
+    // so the UI reflects what is really on screen — without recomputing the
+    // schedule/playlist logic. Falls back to live computation only when the
+    // device has never polled (no cache yet).
+    const cached = await this.readCurrentScreenCache(device.id)
+    if (cached) {
+      this.logger.log(`Returning cached current screen for device ${device.id}: ${cached.filename}`)
+      return cached
+    }
+
+    // === Fallback: no cache yet, compute the current screen ===
+    // (kept in sync with getCurrentImage so the first /api/display poll
+    //  and a cache-less /api/current_screen agree)
 
     // === Schedule checks ===
     // Highest priority: device off-schedule period → show screensaver or noScreen.
