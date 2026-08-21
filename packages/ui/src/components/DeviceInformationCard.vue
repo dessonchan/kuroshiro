@@ -188,6 +188,19 @@ const refreshRateUnit = ref<'hours' | 'minutes' | 'seconds'>('seconds')
 
 const refreshRateNumber = ref(300)
 
+// Estimated time of the device's next /api/display poll.
+// The firmware polls every `refreshRate` seconds, so the next refresh is
+// approximately `lastSeen + refreshRate`. (Schedule-aware dynamic refresh
+// rates are not known to the UI, so this is a baseline estimate.)
+const nextRefreshTime = computed(() => {
+  if (!device.value?.lastSeen || !device.value?.refreshRate)
+    return null
+  const lastSeen = new Date(device.value.lastSeen)
+  if (Number.isNaN(lastSeen.getTime()))
+    return null
+  return new Date(lastSeen.getTime() + device.value.refreshRate * 1000)
+})
+
 const newRefreshRate = computed(() => {
   switch (refreshRateUnit.value) {
     case 'hours':
@@ -278,6 +291,12 @@ const nameEditing = ref(false)
             <strong>Last seen:</strong>
             <div class="text-truncate">
               {{ device.lastSeen ? formatDate(device.lastSeen) : 'N/A' }}
+            </div>
+          </VCol>
+          <VCol cols="12" sm="4">
+            <strong>Next refresh:</strong>
+            <div class="text-truncate" data-test-id="next-refresh-time">
+              {{ nextRefreshTime ? formatDate(nextRefreshTime.toISOString()) : 'N/A' }}
             </div>
           </VCol>
           <VCol cols="12" sm="4">
